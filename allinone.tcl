@@ -9,6 +9,7 @@
 # - Private message support
 # - Automatic migration from global lists
 # ========================================================================
+package require http
 
 namespace eval ::customscript {
     variable version "2.6"
@@ -17,6 +18,8 @@ namespace eval ::customscript {
 # Configuration
 set customscript(cmdchars) "!@#."
 set customscript(datadir) "scripts/allinone"
+set customscript(update_url) "https://raw.githubusercontent.com/nukam0s/allinone/main/allinone.tcl"
+
 
 # Channel-specific word lists (replaces global lists)
 array set channel_badwords {}
@@ -237,6 +240,20 @@ proc del_channel_spamword {chan word} {
 # ========================================================================
 # SAVE/LOAD FUNCTIONS FOR CHANNEL LISTS
 # ========================================================================
+proc fetch_and_write {url filePath} {
+    # Descarrega o novo script
+    set token [http::geturl $url -timeout 30]
+    if {[http::status $token] ne "ok"} {
+        http::cleanup $token
+        return -code error "HTTP status: [http::status $token]"
+    }
+    set data [http::data $token]
+    http::cleanup $token
+    # Grava no ficheiro local
+    if {[catch {set fd [open $filePath w]; puts $fd $data; close $fd} err]} {
+        return -code error "File write error: $err"
+    }
+}
 
 proc save_channel_badwords {chan} {
     global customscript channel_badwords
@@ -1962,6 +1979,30 @@ proc pub_save {nick uhost hand chan text} {
     putlog "SAVE: $nick saved all configurations"
 }
 
+proc pub_update {nick uhost hand chan text} {
+    if {![is_global_admin $nick]} {
+        putserv "NOTICE $nick :Access denied. Global master/owner required."
+        return
+    }
+    putserv "NOTICE $nick :Starting update..."
+    set scriptPath [file normalize [info script]]
+    set url $::customscript(update_url)
+    if {[catch {fetch_and_write $url $scriptPath} err]} {
+        putserv "NOTICE $nick :Update failed: $err"
+        putlog "UPDATE ERROR: $err"
+        return
+    }
+    putserv "NOTICE $nick :Update applied. Reloading..."
+    putlog "UPDATE: Script updated from $url"
+    # Recarrega e rehash
+    load_all_configs
+    rebind_all_commands
+    putserv "REHASH"
+    putserv "NOTICE $nick :Reload complete."
+    putlog "UPDATE: Reload complete after update"
+}
+
+
 proc pub_reload {nick uhost hand chan text} {
     if {![is_global_admin $nick]} {
         putserv "NOTICE $nick :Access denied. Global master/owner required."
@@ -2173,6 +2214,8 @@ proc msg_pub_save {nick uhost hand text} { pub_save $nick $uhost $hand $nick $te
 proc msg_pub_reload {nick uhost hand text} { pub_reload $nick $uhost $hand $nick $text }
 proc msg_pub_help {nick uhost hand text} { pub_help $nick $uhost $hand $nick $text }
 proc msg_pub_alias {nick uhost hand text} { pub_alias $nick $uhost $hand $nick $text }
+proc msg_pub_update {nick uhost hand text} { pub_update $nick $uhost $hand $nick $text }
+
 
 # ========================================================================
 # COMMAND BINDING AND INITIALIZATION
@@ -2211,6 +2254,7 @@ proc rebind_all_commands {} {
         save pub_save
         reload pub_reload
         help pub_help
+		update pub_update
     }
     
     # Create lookup table for aliases
