@@ -10,10 +10,6 @@
 # - Automatic migration from global lists
 # ========================================================================
 package require http
-package require tls
-tls::init
-http::register https -protocol tls -tlsversion tls1.2
-
 
 namespace eval ::customscript {
     variable version "2.6"
@@ -245,19 +241,29 @@ proc del_channel_spamword {chan word} {
 # SAVE/LOAD FUNCTIONS FOR CHANNEL LISTS
 # ========================================================================
 proc fetch_and_write {url filePath} {
-    # Descarrega o novo script
-    set token [http::geturl $url -timeout 30]
-    if {[http::status $token] ne "ok"} {
-        http::cleanup $token
-        return -code error "HTTP status: [http::status $token]"
+    # Usa wget para descarregar via HTTPS
+    # Gera um ficheiro temporário no mesmo diretório
+    set tmpfile "${filePath}.new"
+
+    # Descarrega com wget -q para quiet e -O para output
+    if {[catch {exec wget -q -O $tmpfile $url} err]} {
+        return -code error "Download error: $err"
     }
-    set data [http::data $token]
-    http::cleanup $token
-    # Grava no ficheiro local
-    if {[catch {set fd [open $filePath w]; puts $fd $data; close $fd} err]} {
-        return -code error "File write error: $err"
+
+    # Verifica existência do ficheiro temporário
+    if {![file exists $tmpfile]} {
+        return -code error "Download failed: no data"
+    }
+
+    # Substitui o ficheiro original
+    if {[catch {file rename -force $tmpfile $filePath} err2]} {
+        # Se falhar, apaga o tmpfile
+        catch {file delete $tmpfile}
+        return -code error "File write error: $err2"
     }
 }
+
+
 
 proc save_channel_badwords {chan} {
     global customscript channel_badwords
@@ -1989,7 +1995,8 @@ proc pub_update {nick uhost hand chan text} {
         return
     }
     putserv "NOTICE $nick :Starting update..."
-    set scriptPath [file normalize [info script]]
+    # Em vez de [info script], define manualmente o caminho do ficheiro
+    set scriptPath [file normalize "scripts/allinone.tcl"]
     set url $::customscript(update_url)
     if {[catch {fetch_and_write $url $scriptPath} err]} {
         putserv "NOTICE $nick :Update failed: $err"
@@ -1998,13 +2005,14 @@ proc pub_update {nick uhost hand chan text} {
     }
     putserv "NOTICE $nick :Update applied. Reloading..."
     putlog "UPDATE: Script updated from $url"
-    # Recarrega e rehash
     load_all_configs
     rebind_all_commands
     putserv "REHASH"
     putserv "NOTICE $nick :Reload complete."
     putlog "UPDATE: Reload complete after update"
 }
+
+
 
 
 proc pub_reload {nick uhost hand chan text} {
