@@ -10,6 +10,10 @@
 # - Automatic migration from global lists
 # ========================================================================
 package require http
+package require tls
+tls::init
+http::register https -protocol tls -tlsversion tls1.2
+
 
 namespace eval ::customscript {
     variable version "2.6"
