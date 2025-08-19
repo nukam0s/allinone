@@ -1995,7 +1995,7 @@ proc pub_update {nick uhost hand chan text} {
         return
     }
     putserv "NOTICE $nick :Starting update..."
-    # Em vez de [info script], define manualmente o caminho do ficheiro
+    # Caminho absoluto do script
     set scriptPath [file normalize "scripts/allinone.tcl"]
     set url $::customscript(update_url)
     if {[catch {fetch_and_write $url $scriptPath} err]} {
@@ -2005,14 +2005,12 @@ proc pub_update {nick uhost hand chan text} {
     }
     putserv "NOTICE $nick :Update applied. Reloading..."
     putlog "UPDATE: Script updated from $url"
-    load_all_configs
-    rebind_all_commands
+    # Re-sourça o script atualizado (redefine todas as procs)
+    source $scriptPath
     putserv "REHASH"
     putserv "NOTICE $nick :Reload complete."
     putlog "UPDATE: Reload complete after update"
 }
-
-
 
 
 proc pub_reload {nick uhost hand chan text} {
