@@ -880,6 +880,86 @@ proc bind_all_command {chars cmd procname} {
 # ========================================================================
 # CHANNEL MANAGEMENT COMMANDS
 # ========================================================================
+proc pub_addchan {nick uhost hand chan text} {
+    if {![is_global_admin $nick]} {
+        putserv "NOTICE $nick :Access denied. Global master/owner required."
+        return
+    }
+    
+    set args [split $text]
+    set target_chan [lindex $args 0]
+    set chan_key [lindex $args 1]
+    
+    if {$target_chan == "" || [string index $target_chan 0] != "#"} {
+        putserv "NOTICE $nick :Syntax: addchan <#channel> [key]"
+        return
+    }
+    
+    # Check if already in channel
+    if {[lsearch -exact [channels] $target_chan] != -1} {
+        putserv "NOTICE $nick :Already in $target_chan"
+        return
+    }
+    
+    # Add channel to Eggdrop
+    if {$chan_key != ""} {
+        channel add $target_chan {chanmode +nt idle-kick 0 key $chan_key}
+    } else {
+        channel add $target_chan {chanmode +nt idle-kick 0}
+    }
+    
+    # Join the channel
+    putserv "JOIN $target_chan $chan_key"
+    
+    # Initialize protection settings
+    init_channel_protection $target_chan
+    
+    putserv "NOTICE $nick :Added and joined $target_chan"
+    putlog "ADDCHAN: $nick added channel $target_chan"
+}
+
+proc pub_delchan {nick uhost hand chan text} {
+    if {![is_global_admin $nick]} {
+        putserv "NOTICE $nick :Access denied. Global master/owner required."
+        return
+    }
+    
+    set target_chan [lindex $text 0]
+    
+    if {$target_chan == "" || [string index $target_chan 0] != "#"} {
+        putserv "NOTICE $nick :Syntax: delchan <#channel>"
+        return
+    }
+    
+    # Check if in channel
+    if {[lsearch -exact [channels] $target_chan] == -1} {
+        putserv "NOTICE $nick :Not in $target_chan"
+        return
+    }
+    
+    # Part the channel
+    putserv "PART $target_chan :Removed by $nick"
+    
+    # Remove from Eggdrop config
+    channel remove $target_chan
+    
+    putserv "NOTICE $nick :Left and removed $target_chan"
+    putlog "DELCHAN: $nick removed channel $target_chan"
+}
+
+proc init_channel_protection {chan} {
+    global default_settings channel_settings
+    
+    # Initialize with default settings if not already set
+    foreach setting [array names default_settings] {
+        if {![info exists channel_settings($chan,$setting)]} {
+            set channel_settings($chan,$setting) $default_settings($setting)
+        }
+    }
+    
+    save_channel_config $chan
+    putlog "Initialized protection settings for $chan"
+}
 
 proc pub_op {nick uhost hand chan text} {
     if {![is_op_level $nick $chan]} {
@@ -2051,10 +2131,15 @@ proc pub_help {nick uhost hand chan text} {
         
         switch $topic {
             "channel" {
-                putserv "NOTICE $nick :=== CHANNEL MANAGEMENT ==="
-                putserv "NOTICE $nick :op/deop <nick> | voice/devoice <nick> | kick <nick> \[reason\]"
-                putserv "NOTICE $nick :ban <nick/mask> \[mins\] | unban <hostmask>"
-            }
+				putserv "NOTICE $nick :=== CHANNEL MANAGEMENT ==="
+				putserv "NOTICE $nick :addchan <#channel> [key]   – Add & join a new channel"
+				putserv "NOTICE $nick :delchan <#channel>        – Part & remove a channel"
+				putserv "NOTICE $nick :op/deop <nick>           – Give or take ops"
+				putserv "NOTICE $nick :voice/devoice <nick>     – Give or take voice"
+				putserv "NOTICE $nick :kick <nick> [reason]     – Kick a user"
+				putserv "NOTICE $nick :ban <nick/mask> [mins]   – Ban a user or mask"
+				putserv "NOTICE $nick :unban <hostmask>         – Remove a ban"
+			}
             "user" {
                 putserv "NOTICE $nick :=== USER MANAGEMENT ==="
                 putserv "NOTICE $nick :chattr <handle> \[flags\] \[#chan\] | adduser <handle> <mask>"
@@ -2114,7 +2199,7 @@ proc pub_help {nick uhost hand chan text} {
     }
     
     putserv "NOTICE $nick :TOPICS: channel user info protection lists system permissions examples"
-    putserv "NOTICE $nick :QUICK: !protection (view) !chaninfo (status) !badwords list !channels"
+    putserv "NOTICE $nick :Quick: !addchan, !delchan, !op, !kick, !ban, !badwords, etc."
     putserv "NOTICE $nick :7 protections: msgflood repeatflood caps spam badwords badpart badchan"
     putserv "NOTICE $nick :Permissions: Global(n/m) Channel(n/m on chan) Op(o) Voice(v) | Works via /msg"
 }
@@ -2225,6 +2310,8 @@ proc msg_pub_reload {nick uhost hand text} { pub_reload $nick $uhost $hand $nick
 proc msg_pub_help {nick uhost hand text} { pub_help $nick $uhost $hand $nick $text }
 proc msg_pub_alias {nick uhost hand text} { pub_alias $nick $uhost $hand $nick $text }
 proc msg_pub_update {nick uhost hand text} { pub_update $nick $uhost $hand $nick $text }
+proc msg_pub_addchan {nick uhost hand text} { pub_addchan $nick $uhost $hand $nick $text }
+proc msg_pub_delchan {nick uhost hand text} { pub_delchan $nick $uhost $hand $nick $text }
 
 
 # ========================================================================
@@ -2265,6 +2352,8 @@ proc rebind_all_commands {} {
         reload pub_reload
         help pub_help
 		update pub_update
+		addchan pub_addchan
+		delchan pub_delchan
     }
     
     # Create lookup table for aliases
