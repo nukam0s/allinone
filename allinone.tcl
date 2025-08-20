@@ -2132,12 +2132,12 @@ proc pub_help {nick uhost hand chan text} {
         switch $topic {
             "channel" {
 				putserv "NOTICE $nick :=== CHANNEL MANAGEMENT ==="
-				putserv "NOTICE $nick :addchan <#channel> [key]   – Add & join a new channel"
+				putserv "NOTICE $nick :addchan <#channel> \[key\]   – Add & join a new channel"
 				putserv "NOTICE $nick :delchan <#channel>        – Part & remove a channel"
 				putserv "NOTICE $nick :op/deop <nick>           – Give or take ops"
 				putserv "NOTICE $nick :voice/devoice <nick>     – Give or take voice"
-				putserv "NOTICE $nick :kick <nick> [reason]     – Kick a user"
-				putserv "NOTICE $nick :ban <nick/mask> [mins]   – Ban a user or mask"
+				putserv "NOTICE $nick :kick <nick> \[reason\]     – Kick a user"
+				putserv "NOTICE $nick :ban <nick/mask> \[mins\]   – Ban a user or mask"
 				putserv "NOTICE $nick :unban <hostmask>         – Remove a ban"
 			}
             "user" {
