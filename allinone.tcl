@@ -820,7 +820,23 @@ proc apply_punishment {nick uhost chan type reason} {
     set punishment [get_channel_setting $chan "${type}_punishment"]
     set bantime [get_channel_setting $chan "${type}_bantime"]
     
-    if {[is_op $nick $chan] || [is_voice $nick $chan]} {
+    # Verificar se o utilizador tem flags protegidas
+    global protected_flags
+    set hand [nick2hand $nick $chan]
+    
+    # Verificar flags globais e do canal
+    set user_flags [chattr $hand]
+    append user_flags [chattr $hand $chan]
+    
+    foreach protected_flag $protected_flags {
+        if {[string match "*${protected_flag}*" $user_flags]} {
+            putlog "PROTECTION: Not punishing $nick ($type): has protected flag $protected_flag"
+            return
+        }
+    }
+    
+    # Verificar se tem op/voice no canal (proteção adicional)
+    if {[isop $nick $chan] || [isvoice $nick $chan]} {
         putlog "PROTECTION: Not punishing $nick ($type): has op/voice"
         return
     }
@@ -1577,11 +1593,6 @@ proc pub_chaninfo {nick uhost hand chan text} {
 }
 
 proc pub_chanset {nick uhost hand chan text} {
-    if {![is_global_admin $nick]} {
-        putserv "NOTICE $nick :Access denied. Global master/owner required."
-        return
-    }
-    
     set args [split $text]
     
     set target_chan $chan
@@ -1592,6 +1603,11 @@ proc pub_chanset {nick uhost hand chan text} {
     } else {
         set setting [lindex $args 0]
         set value [lindex $args 1]
+    }
+    
+    if {![is_admin_on_channel $nick $target_chan]} {
+        putserv "NOTICE $nick :Access denied on $target_chan."
+        return
     }
     
     if {$setting == ""} {
@@ -1730,8 +1746,9 @@ proc pub_protection {nick uhost hand chan text} {
 }
 
 proc pub_protectionall {nick uhost hand chan text} {
-    if {![is_global_admin $nick]} {
-        putserv "NOTICE $nick :Access denied. Global master/owner required."
+    set hand_user [nick2hand $nick]
+    if {![matchattr $hand_user n]} {
+        putserv "NOTICE $nick :Access denied. Global owner required."
         return
     }
     
@@ -1768,6 +1785,17 @@ proc pub_copychan {nick uhost hand chan text} {
     
     set source [lindex $args 0]
     set dest [lindex $args 1]
+    
+    # Verificar se os canais existem
+    if {![validchan $source]} {
+        putserv "NOTICE $nick :Source channel $source not found."
+        return
+    }
+    
+    if {![validchan $dest]} {
+        putserv "NOTICE $nick :Destination channel $dest not found."
+        return
+    }
     
     if {![is_admin_on_channel $nick $source] || ![is_admin_on_channel $nick $dest]} {
         putserv "NOTICE $nick :Access denied. You need admin on both channels."
@@ -2075,6 +2103,16 @@ proc pub_alias {nick uhost hand chan text} {
                 putserv "NOTICE $nick :Syntax: alias add <alias> <real_command>"
                 return
             }
+            
+            # Validar que o comando real existe
+            set valid_commands {op deop voice devoice kick ban unban chattr match adduser deluser addhost delhost whois chaninfo chanset protection protectionall channels copychan resetchan badwords badchans spamwords alias char save reload help update addchan delchan}
+            
+            if {[lsearch -exact $valid_commands $real_cmd] == -1} {
+                putserv "NOTICE $nick :Invalid command: $real_cmd"
+                putserv "NOTICE $nick :Valid commands: [join $valid_commands {, }]"
+                return
+            }
+            
             set command_aliases($alias) $real_cmd
             save_aliases
             rebind_all_commands
@@ -2094,24 +2132,24 @@ proc pub_alias {nick uhost hand chan text} {
             }
         }
         "list" {
-			putserv "NOTICE $nick :=== COMMAND ALIASES ==="
-			set aliases [array get command_aliases]
-			if {[llength $aliases] == 0} {
-				putserv "NOTICE $nick :Nenhum alias definido."
-				return
-			}
-			# aliases é uma lista {alias1 cmd1 alias2 cmd2 …}
-			set pairs {}
-			foreach {a c} $aliases {
-				lappend pairs "$a->$c"
-			}
-			# Envia em grupos de 4 pares por linha
-			set group_size 5
-			for {set i 0} {$i < [llength $pairs]} {incr i $group_size} {
-				set slice [lrange $pairs $i [expr {$i + $group_size - 1}]]
-				putserv "NOTICE $nick :[join $slice { , }]"
-			}
-		}
+            putserv "NOTICE $nick :=== COMMAND ALIASES ==="
+            set aliases [array get command_aliases]
+            if {[llength $aliases] == 0} {
+                putserv "NOTICE $nick :No aliases defined."
+                return
+            }
+            # aliases é uma lista {alias1 cmd1 alias2 cmd2 …}
+            set pairs {}
+            foreach {a c} $aliases {
+                lappend pairs "$a->$c"
+            }
+            # Envia em grupos de 5 pares por linha
+            set group_size 5
+            for {set i 0} {$i < [llength $pairs]} {incr i $group_size} {
+                set slice [lrange $pairs $i [expr {$i + $group_size - 1}]]
+                putserv "NOTICE $nick :[join $slice { , }]"
+            }
+        }
         "reset" {
             array unset command_aliases
             load_aliases
@@ -2314,6 +2352,12 @@ proc msg_pub_op {nick uhost hand text} {
     }
     set target [lindex $args 0]
     set chan [lindex $args 1]
+    
+    if {![validchan $chan]} {
+        putserv "NOTICE $nick :Invalid channel: $chan"
+        return
+    }
+    
     pub_op $nick $uhost $hand $chan $target
 }
 
@@ -2325,6 +2369,12 @@ proc msg_pub_deop {nick uhost hand text} {
     }
     set target [lindex $args 0]
     set chan [lindex $args 1]
+    
+    if {![validchan $chan]} {
+        putserv "NOTICE $nick :Invalid channel: $chan"
+        return
+    }
+    
     pub_deop $nick $uhost $hand $chan $target
 }
 
@@ -2336,6 +2386,12 @@ proc msg_pub_voice {nick uhost hand text} {
     }
     set target [lindex $args 0]
     set chan [lindex $args 1]
+    
+    if {![validchan $chan]} {
+        putserv "NOTICE $nick :Invalid channel: $chan"
+        return
+    }
+    
     pub_voice $nick $uhost $hand $chan $target
 }
 
@@ -2347,6 +2403,12 @@ proc msg_pub_devoice {nick uhost hand text} {
     }
     set target [lindex $args 0]
     set chan [lindex $args 1]
+    
+    if {![validchan $chan]} {
+        putserv "NOTICE $nick :Invalid channel: $chan"
+        return
+    }
+    
     pub_devoice $nick $uhost $hand $chan $target
 }
 
@@ -2359,6 +2421,12 @@ proc msg_pub_kick {nick uhost hand text} {
     set target [lindex $args 0]
     set chan [lindex $args 1]
     set reason [join [lrange $args 2 end] " "]
+    
+    if {![validchan $chan]} {
+        putserv "NOTICE $nick :Invalid channel: $chan"
+        return
+    }
+    
     pub_kick $nick $uhost $hand $chan "$target $reason"
 }
 
@@ -2371,6 +2439,12 @@ proc msg_pub_ban {nick uhost hand text} {
     set target [lindex $args 0]
     set chan [lindex $args 1]
     set minutes [lindex $args 2]
+    
+    if {![validchan $chan]} {
+        putserv "NOTICE $nick :Invalid channel: $chan"
+        return
+    }
+    
     pub_ban $nick $uhost $hand $chan "$target $minutes"
 }
 
@@ -2382,6 +2456,12 @@ proc msg_pub_unban {nick uhost hand text} {
     }
     set mask [lindex $args 0]
     set chan [lindex $args 1]
+    
+    if {![validchan $chan]} {
+        putserv "NOTICE $nick :Invalid channel: $chan"
+        return
+    }
+    
     pub_unban $nick $uhost $hand $chan $mask
 }
 
