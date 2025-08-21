@@ -78,36 +78,50 @@ array set command_aliases {}
 # PERMISSION FUNCTIONS
 # ========================================================================
 
-# Original functions (for backward compatibility)
 proc is_admin {nick chan} {
+    if {[is_global_admin $nick]} {
+        return 1
+    }
     set hand [nick2hand $nick $chan]
-    if {[matchattr $hand n|n $chan] || [matchattr $hand m|m $chan]} { 
-        return 1 
+    if {[matchattr $hand n|n $chan] || [matchattr $hand m|m $chan]} {
+        return 1
     }
     return 0
 }
 
 proc is_op_level {nick chan} {
+    if {[is_global_admin $nick]} {
+        return 1
+    }
     set hand [nick2hand $nick $chan]
-    if {[matchattr $hand n|n $chan] || [matchattr $hand m|m $chan] || [matchattr $hand o|o $chan]} { 
-        return 1 
+    if {[matchattr $hand n|n $chan] ||
+        [matchattr $hand m|m $chan] ||
+        [matchattr $hand o|o $chan]} {
+        return 1
     }
     return 0
 }
 
 proc is_voice_level {nick chan} {
+    if {[is_global_admin $nick]} {
+        return 1
+    }
     set hand [nick2hand $nick $chan]
-    if {[matchattr $hand n|n $chan] || [matchattr $hand m|m $chan] || [matchattr $hand o|o $chan] || [matchattr $hand v|v $chan]} { 
-        return 1 
+    if {[matchattr $hand n|n $chan] ||
+        [matchattr $hand m|m $chan] ||
+        [matchattr $hand o|o $chan] ||
+        [matchattr $hand v|v $chan]} {
+        return 1
     }
     return 0
 }
 
+
 # New permission functions for channel-specific security
 proc is_global_admin {nick} {
     set hand [nick2hand $nick]
-    if {[matchattr $hand n] || [matchattr $hand m]} { 
-        return 1 
+    if {[matchattr $hand n] || [matchattr $hand m]} {
+        return 1
     }
     return 0
 }
@@ -1137,7 +1151,7 @@ proc pub_chattr {nick uhost hand chan text} {
     set target_chan [lindex $args 2]
     
     if {$target_handle == ""} {
-        putserv "NOTICE $nick :Syntax: chattr <handle> \[flags\] \[#channel\]"
+        putserv "NOTICE $nick :Syntax: chattr <handle> [flags] [#channel]"
         return
     }
     
@@ -1156,30 +1170,75 @@ proc pub_chattr {nick uhost hand chan text} {
             foreach c [channels] {
                 set chan_flags [chattr $target_handle $c]
                 if {$chan_flags != ""} {
-                    putserv "NOTICE $nick :  $c: $chan_flags"
+                    putserv "NOTICE $nick : $c: $chan_flags"
                 }
             }
         }
         return
     }
     
-    global protected_flags
-    foreach flag [split $new_flags ""] {
-        set flag [string trim $flag "+-"]
-        if {[lsearch -exact $protected_flags $flag] != -1} {
-            if {![is_global_admin $nick]} {
-                putserv "NOTICE $nick :Access denied. Cannot modify protected flag: $flag"
+    if {$target_handle == $hand} {
+        global protected_flags
+        foreach protected_flag $protected_flags {
+            if {[string match "*-${protected_flag}*" $new_flags]} {
+                putserv "NOTICE $nick :Access denied. Cannot remove your own critical flag: $protected_flag"
                 return
             }
         }
     }
     
+    global protected_flags
+    
+    set operations {}
+    set current_op ""
+    set i 0
+    
+    while {$i < [string length $new_flags]} {
+        set char [string index $new_flags $i]
+        if {$char == "+" || $char == "-"} {
+            set current_op $char
+        } elseif {$char == " "} {
+        } else {
+            if {$current_op != ""} {
+                lappend operations "$current_op$char"
+            } else {
+                lappend operations "+$char"
+            }
+        }
+        incr i
+    }
+    
+    foreach op $operations {
+        set operator [string index $op 0]
+        set flag [string index $op 1]
+        
+        if {[lsearch -exact $protected_flags $flag] != -1} {
+            if {$operator == "+"} {
+                if {![is_global_admin $nick]} {
+                    putserv "NOTICE $nick :Access denied. Cannot add protected flag: $flag"
+                    return
+                }
+            } elseif {$operator == "-" && $target_handle != $hand} {
+                if {![is_global_admin $nick]} {
+                    putserv "NOTICE $nick :Access denied. Cannot remove protected flag: $flag from others"
+                    return
+                }
+            }
+        }
+    }
+    
     if {$target_chan != ""} {
-        chattr $target_handle $new_flags $target_chan
+        if {[catch {chattr $target_handle $new_flags $target_chan} err]} {
+            putserv "NOTICE $nick :Error setting flags: $err"
+            return
+        }
         putserv "NOTICE $nick :Set flags for $target_handle on $target_chan: $new_flags"
         putlog "CHATTR: $nick set flags for $target_handle on $target_chan: $new_flags"
     } else {
-        chattr $target_handle $new_flags
+        if {[catch {chattr $target_handle $new_flags} err]} {
+            putserv "NOTICE $nick :Error setting flags: $err"
+            return
+        }
         putserv "NOTICE $nick :Set global flags for $target_handle: $new_flags"
         putlog "CHATTR: $nick set global flags for $target_handle: $new_flags"
     }
@@ -1333,45 +1392,56 @@ proc pub_delhost {nick uhost hand chan text} {
 }
 
 proc pub_whois {nick uhost hand chan text} {
-    if {![is_voice_level $nick $chan]} {
+    # Se chamado com chan vazio, escolhe um canal onde o bot esteja
+    if {$chan == ""} {
+        set chan [lindex [channels] 0]
+    }
+    # Verificação de permissões: voice ou global admin
+    if {![is_voice_level $nick $chan] && ![is_global_admin $nick]} {
         putserv "NOTICE $nick :Access denied."
         return
     }
-    
     if {$text == ""} {
         putserv "NOTICE $nick :Syntax: whois <handle>"
         return
     }
-    
-    set target_handle $text
-    
-    if {![validuser $target_handle]} {
-        putserv "NOTICE $nick :User $target_handle not found."
+    set target $text
+    if {![validuser $target]} {
+        putserv "NOTICE $nick :User $target not found."
         return
     }
-    
-    putserv "NOTICE $nick :=== Info for $target_handle ==="
-    
-    set global_flags [chattr $target_handle]
-    putserv "NOTICE $nick :Global flags: $global_flags"
-    
+
+    putserv "NOTICE $nick := Info for $target ="
+    # Global flags
+    set gflags [chattr $target]
+    putserv "NOTICE $nick :Global flags: $gflags"
+    # Flags por canal
     foreach c [channels] {
-        set chan_flags [chattr $target_handle $c]
-        if {$chan_flags != ""} {
-            putserv "NOTICE $nick :$c: $chan_flags"
+        set cflags [chattr $target $c]
+        if {$cflags ne ""} {
+            putserv "NOTICE $nick :$c: $cflags"
         }
     }
-    
-    set hosts [getuser $target_handle HOSTS]
+    # Hostmasks
+    set hosts [getuser $target HOSTS]
     if {[llength $hosts] > 0} {
         putserv "NOTICE $nick :Hostmasks: [join $hosts {, }]"
     }
-    
-    set lastseen [getuser $target_handle LASTSEEN]
-    if {$lastseen != ""} {
-        putserv "NOTICE $nick :Last seen: $lastseen"
+    # Last seen com catch
+    set last ""
+    if {[catch {set last [getuser $target LASTSEEN]} err1]} {
+        catch {set last [getuser $target lastseen]}
+    }
+    if {$last ne ""} {
+        putserv "NOTICE $nick :Last seen: $last"
     }
 }
+
+proc msg_pub_whois {nick uhost hand text} {
+    pub_whois $nick $uhost $hand "" $text
+}
+
+
 
 # ========================================================================
 # CHANNEL INFO COMMANDS
@@ -2287,13 +2357,13 @@ proc msg_pub_unban {nick uhost hand text} {
     pub_unban $nick $uhost $hand $chan $mask
 }
 
-proc msg_pub_chattr {nick uhost hand text} { pub_chattr $nick $uhost $hand $nick $text }
-proc msg_pub_match {nick uhost hand text} { pub_match $nick $uhost $hand $nick $text }
-proc msg_pub_adduser {nick uhost hand text} { pub_adduser $nick $uhost $hand $nick $text }
-proc msg_pub_deluser {nick uhost hand text} { pub_deluser $nick $uhost $hand $nick $text }
-proc msg_pub_addhost {nick uhost hand text} { pub_addhost $nick $uhost $hand $nick $text }
-proc msg_pub_delhost {nick uhost hand text} { pub_delhost $nick $uhost $hand $nick $text }
-proc msg_pub_whois {nick uhost hand text} { pub_whois $nick $uhost $hand $nick $text }
+proc msg_pub_chattr {nick uhost hand text} { pub_chattr $nick $uhost $hand "" $text }
+proc msg_pub_match {nick uhost hand text} { pub_match $nick $uhost $hand "" $text }
+proc msg_pub_adduser {nick uhost hand text} { pub_adduser $nick $uhost $hand "" $text }
+proc msg_pub_deluser {nick uhost hand text} { pub_deluser $nick $uhost $hand "" $text }
+proc msg_pub_addhost {nick uhost hand text} { pub_addhost $nick $uhost $hand "" $text }
+proc msg_pub_delhost {nick uhost hand text} { pub_delhost $nick $uhost $hand "" $text }
+proc msg_pub_whois {nick uhost hand text} { pub_whois $nick $uhost $hand "" $text }
 proc msg_pub_chanset {nick uhost hand text} { pub_chanset $nick $uhost $hand $nick $text }
 proc msg_pub_chaninfo {nick uhost hand text} { pub_chaninfo $nick $uhost $hand $nick $text }
 proc msg_pub_protection {nick uhost hand text} { pub_protection $nick $uhost $hand $nick $text }
