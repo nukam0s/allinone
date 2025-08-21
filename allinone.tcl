@@ -79,38 +79,30 @@ array set command_aliases {}
 # ========================================================================
 
 proc is_admin {nick chan} {
-    if {[is_global_admin $nick]} {
-        return 1
-    }
     set hand [nick2hand $nick $chan]
-    if {[matchattr $hand n|n $chan] || [matchattr $hand m|m $chan]} {
+    # Admin global OU admin do canal específico
+    if {[matchattr $hand n] || [matchattr $hand m] ||
+        [matchattr $hand n $chan] || [matchattr $hand m $chan]} {
         return 1
     }
     return 0
 }
 
 proc is_op_level {nick chan} {
-    if {[is_global_admin $nick]} {
-        return 1
-    }
     set hand [nick2hand $nick $chan]
-    if {[matchattr $hand n|n $chan] ||
-        [matchattr $hand m|m $chan] ||
-        [matchattr $hand o|o $chan]} {
+    # Global OU específico do canal
+    if {[matchattr $hand n] || [matchattr $hand m] || [matchattr $hand o] ||
+        [matchattr $hand n $chan] || [matchattr $hand m $chan] || [matchattr $hand o $chan]} {
         return 1
     }
     return 0
 }
 
 proc is_voice_level {nick chan} {
-    if {[is_global_admin $nick]} {
-        return 1
-    }
     set hand [nick2hand $nick $chan]
-    if {[matchattr $hand n|n $chan] ||
-        [matchattr $hand m|m $chan] ||
-        [matchattr $hand o|o $chan] ||
-        [matchattr $hand v|v $chan]} {
+    # Global OU específico do canal
+    if {[matchattr $hand n] || [matchattr $hand m] || [matchattr $hand o] || [matchattr $hand v] ||
+        [matchattr $hand n $chan] || [matchattr $hand m $chan] || [matchattr $hand o $chan] || [matchattr $hand v $chan]} {
         return 1
     }
     return 0
@@ -128,16 +120,20 @@ proc is_global_admin {nick} {
 
 proc is_admin_on_channel {nick target_chan} {
     set hand [nick2hand $nick $target_chan]
-    if {[matchattr $hand n|n $target_chan] || [matchattr $hand m|m $target_chan]} { 
-        return 1 
+    # Global OU específico do canal
+    if {[matchattr $hand n] || [matchattr $hand m] ||
+        [matchattr $hand n $target_chan] || [matchattr $hand m $target_chan]} {
+        return 1
     }
     return 0
 }
 
 proc is_op_on_channel {nick target_chan} {
     set hand [nick2hand $nick $target_chan]
-    if {[matchattr $hand n|n $target_chan] || [matchattr $hand m|m $target_chan] || [matchattr $hand o|o $target_chan]} { 
-        return 1 
+    # Global OU específico do canal
+    if {[matchattr $hand n] || [matchattr $hand m] || [matchattr $hand o] ||
+        [matchattr $hand n $target_chan] || [matchattr $hand m $target_chan] || [matchattr $hand o $target_chan]} {
+        return 1
     }
     return 0
 }
@@ -1177,18 +1173,7 @@ proc pub_chattr {nick uhost hand chan text} {
         return
     }
     
-    if {$target_handle == $hand} {
-        global protected_flags
-        foreach protected_flag $protected_flags {
-            if {[string match "*-${protected_flag}*" $new_flags]} {
-                putserv "NOTICE $nick :Access denied. Cannot remove your own critical flag: $protected_flag"
-                return
-            }
-        }
-    }
-    
-    global protected_flags
-    
+    # Parse operations
     set operations {}
     set current_op ""
     set i 0
@@ -1208,25 +1193,68 @@ proc pub_chattr {nick uhost hand chan text} {
         incr i
     }
     
+    # Get my flags - distinguish between global and channel context
+    set my_global_flags [chattr $hand]
+    if {$target_chan != ""} {
+        set my_chan_flags [chattr $hand $target_chan]
+    } else {
+        set my_chan_flags ""
+    }
+    
+    # Check each operation
     foreach op $operations {
         set operator [string index $op 0]
         set flag [string index $op 1]
         
-        if {[lsearch -exact $protected_flags $flag] != -1} {
-            if {$operator == "+"} {
-                if {![is_global_admin $nick]} {
-                    putserv "NOTICE $nick :Access denied. Cannot add protected flag: $flag"
-                    return
+        set has_permission 0
+        
+        if {$target_chan != ""} {
+            # Setting channel flags - check channel permissions
+            if {[string match "*n*" $my_chan_flags] || [string match "*n*" $my_global_flags]} {
+                set has_permission 1
+            } elseif {[string match "*m*" $my_chan_flags] || [string match "*m*" $my_global_flags]} {
+                if {$flag != "n"} {
+                    set has_permission 1
                 }
-            } elseif {$operator == "-" && $target_handle != $hand} {
-                if {![is_global_admin $nick]} {
-                    putserv "NOTICE $nick :Access denied. Cannot remove protected flag: $flag from others"
-                    return
+            } elseif {[string match "*o*" $my_chan_flags] || [string match "*o*" $my_global_flags]} {
+                if {[lsearch -exact {v f} $flag] != -1} {
+                    set has_permission 1
                 }
+            }
+        } else {
+            # Setting GLOBAL flags - need GLOBAL permissions only
+            if {[string match "*n*" $my_global_flags]} {
+                set has_permission 1
+            } elseif {[string match "*m*" $my_global_flags]} {
+                if {$flag != "n"} {
+                    set has_permission 1
+                }
+            } elseif {[string match "*o*" $my_global_flags]} {
+                if {[lsearch -exact {v f} $flag] != -1} {
+                    set has_permission 1
+                }
+            }
+        }
+        
+        if {!$has_permission} {
+            if {$target_chan != ""} {
+                putserv "NOTICE $nick :Access denied. You don't have flag '$flag' on $target_chan to give/remove it"
+            } else {
+                putserv "NOTICE $nick :Access denied. You don't have global flag '$flag' to give/remove it"
+            }
+            return
+        }
+        
+        # Special protection: cannot remove own critical flags
+        if {$operator == "-" && $target_handle == $hand} {
+            if {[lsearch -exact {n m o} $flag] != -1} {
+                putserv "NOTICE $nick :Access denied. Cannot remove your own critical flag: $flag"
+                return
             }
         }
     }
     
+    # Apply the changes
     if {$target_chan != ""} {
         if {[catch {chattr $target_handle $new_flags $target_chan} err]} {
             putserv "NOTICE $nick :Error setting flags: $err"
