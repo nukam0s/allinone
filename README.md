@@ -1,4 +1,4 @@
-# AllInOne Protection System v2.6
+# AllInOne Protection System
 
 **Channel-Specific Word Lists & Refined Permissions for Eggdrop Bots**
 
