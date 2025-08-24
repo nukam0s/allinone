@@ -2256,7 +2256,7 @@ proc pub_reload {nick uhost hand chan text} {
 proc pub_help {nick uhost hand chan text} {
     global customscript
     
-    putserv "NOTICE $nick :=== ALLINONE SCRIPT v2.6 HELP ==="
+    putserv "NOTICE $nick :=== ALLINONE TCL HELP ==="
     putserv "NOTICE $nick :Command chars: $customscript(cmdchars) | Use: !help <topic> for details"
     putserv "NOTICE $nick :"
     
