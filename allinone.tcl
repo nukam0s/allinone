@@ -1,5 +1,5 @@
 # ========================================================================
-# AllInOne Protection System v2.6 - Channel-Specific Word Lists
+# AllInOne Protection System v2.8 - Channel-Specific Word Lists
 # ========================================================================
 # Features:
 # - Channel-specific badwords/badchans/spamwords lists
@@ -12,7 +12,7 @@
 package require http
 
 namespace eval ::customscript {
-    variable version "2.6"
+    variable version "2.8"
 }
 
 # Configuration
@@ -2582,7 +2582,7 @@ foreach chan [channels] {
 # Bind all commands
 rebind_all_commands
 
-putlog "AllInOne Protection System v2.6 loaded successfully!"
+putlog "AllInOne Protection System v2.8 loaded successfully!"
 putlog "Features: Channel-specific word lists, refined permissions, 7 protections"
 putlog "Command characters: $customscript(cmdchars)"
 putlog "Data directory: $customscript(datadir)"
