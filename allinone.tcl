@@ -1,5 +1,5 @@
 # ========================================================================
-# AllInOne Protection System v2.8 - Channel-Specific Word Lists
+# AllInOne Protection System v2.6 - Channel-Specific Word Lists
 # ========================================================================
 # Features:
 # - Channel-specific badwords/badchans/spamwords lists
@@ -12,7 +12,7 @@
 package require http
 
 namespace eval ::customscript {
-    variable version "2.8"
+    variable version "2.6"
 }
 
 # Configuration
@@ -1156,137 +1156,96 @@ proc pub_chattr {nick uhost hand chan text} {
         putserv "NOTICE $nick :Access denied."
         return
     }
-    
-    set args [split $text]
-    set target_handle [lindex $args 0]
-    set new_flags [lindex $args 1]
-    set target_chan [lindex $args 2]
-    
+
+    set args           [split $text]
+    set target_handle  [lindex $args 0]
+    set new_flags      [lindex $args 1]
+    set target_spec    [lindex $args 2]
+
     if {$target_handle == ""} {
-        putserv "NOTICE $nick :Syntax: chattr <handle> [flags] [#channel]"
+        putserv "NOTICE $nick :Syntax: chattr <handle> <flags> [#channel|global]"
         return
     }
-    
     if {![validuser $target_handle]} {
         putserv "NOTICE $nick :User $target_handle not found."
         return
     }
-    
-    if {$new_flags == ""} {
-        if {$target_chan != ""} {
-            set flags [chattr $target_handle $target_chan]
-            putserv "NOTICE $nick :Flags for $target_handle on $target_chan: $flags"
-        } else {
-            set global_flags [chattr $target_handle]
-            putserv "NOTICE $nick :Global flags for $target_handle: $global_flags"
-            foreach c [channels] {
-                set chan_flags [chattr $target_handle $c]
-                if {$chan_flags != ""} {
-                    putserv "NOTICE $nick : $c: $chan_flags"
-                }
-            }
-        }
-        return
+
+    # Determinar contexto de aplicação
+    if {$target_spec == "global"} {
+        set apply_global 1
+    } elseif {[string index $target_spec 0] == "#"} {
+        set apply_chan $target_spec
+    } else {
+        set apply_chan $chan
     }
-    
-    # Parse operations
-    set operations {}
-    set current_op ""
-    set i 0
-    
+
+    # Parse operações +X / -X
+    set operations {}; set cur_op ""; set i 0
     while {$i < [string length $new_flags]} {
-        set char [string index $new_flags $i]
-        if {$char == "+" || $char == "-"} {
-            set current_op $char
-        } elseif {$char == " "} {
-        } else {
-            if {$current_op != ""} {
-                lappend operations "$current_op$char"
-            } else {
-                lappend operations "+$char"
-            }
+        set ch [string index $new_flags $i]
+        if {$ch == "+" || $ch == "-"} {
+            set cur_op $ch
+        } elseif {$ch ne " "} {
+            if {$cur_op == ""} { set cur_op "+" }
+            lappend operations "${cur_op}${ch}"
         }
         incr i
     }
-    
-    # Get my flags - distinguish between global and channel context
-    set my_global_flags [chattr $hand]
-    if {$target_chan != ""} {
-        set my_chan_flags [chattr $hand $target_chan]
-    } else {
-        set my_chan_flags ""
-    }
-    
-    # Check each operation
+
+    # Verificar permissões para cada operação
+    set my_global  [chattr $hand]
+    set my_chan    [chattr $hand $chan]
     foreach op $operations {
-        set operator [string index $op 0]
         set flag [string index $op 1]
-        
-        set has_permission 0
-        
-        if {$target_chan != ""} {
-            # Setting channel flags - check channel permissions
-            if {[string match "*n*" $my_chan_flags] || [string match "*n*" $my_global_flags]} {
-                set has_permission 1
-            } elseif {[string match "*m*" $my_chan_flags] || [string match "*m*" $my_global_flags]} {
-                if {$flag != "n"} {
-                    set has_permission 1
-                }
-            } elseif {[string match "*o*" $my_chan_flags] || [string match "*o*" $my_global_flags]} {
-                if {[lsearch -exact {v f} $flag] != -1} {
-                    set has_permission 1
-                }
-            }
+        set ok 0
+        if {$apply_global} {
+            # precisa de permissão global
+            if {[string match "*n*" $my_global]} { set ok 1 }
+            elseif {[string match "*m*" $my_global] && $flag ne "n"} { set ok 1 }
+            elseif {[string match "*o*" $my_global] && [lsearch -exact {v f} $flag] != -1} { set ok 1 }
         } else {
-            # Setting GLOBAL flags - need GLOBAL permissions only
-            if {[string match "*n*" $my_global_flags]} {
-                set has_permission 1
-            } elseif {[string match "*m*" $my_global_flags]} {
-                if {$flag != "n"} {
-                    set has_permission 1
-                }
-            } elseif {[string match "*o*" $my_global_flags]} {
-                if {[lsearch -exact {v f} $flag] != -1} {
-                    set has_permission 1
-                }
+            # precisa de permissão no canal
+            if {[string match "*n*" $my_chan] || [string match "*n*" $my_global]} { set ok 1 }
+            elseif {[string match "*m*" $my_chan] || [string match "*m*" $my_global]} {
+                if {$flag ne "n"} { set ok 1 }
+            } elseif {[string match "*o*" $my_chan] || [string match "*o*" $my_global]} {
+                if {[lsearch -exact {v f} $flag] != -1} { set ok 1 }
             }
         }
-        
-        if {!$has_permission} {
-            if {$target_chan != ""} {
-                putserv "NOTICE $nick :Access denied. You don't have flag '$flag' on $target_chan to give/remove it"
+        if {!$ok} {
+            if {$apply_global} {
+                putserv "NOTICE $nick :Access denied. Requires global flag '$flag'."
             } else {
-                putserv "NOTICE $nick :Access denied. You don't have global flag '$flag' to give/remove it"
+                putserv "NOTICE $nick :Access denied. Requires flag '$flag' on $apply_chan."
             }
             return
         }
-        
-        # Special protection: cannot remove own critical flags
-        if {$operator == "-" && $target_handle == $hand} {
-            if {[lsearch -exact {n m o} $flag] != -1} {
-                putserv "NOTICE $nick :Access denied. Cannot remove your own critical flag: $flag"
-                return
-            }
+        # Impedir remoção de flags críticas próprias
+        if {$op starts_with "-" && $target_handle eq $hand && [lsearch -exact {n m o} $flag] != -1} {
+            putserv "NOTICE $nick :Cannot remove sua própria flag crítica '$flag'."
+            return
         }
     }
-    
-    # Apply the changes
-    if {$target_chan != ""} {
-        if {[catch {chattr $target_handle $new_flags $target_chan} err]} {
-            putserv "NOTICE $nick :Error setting flags: $err"
-            return
-        }
-        putserv "NOTICE $nick :Set flags for $target_handle on $target_chan: $new_flags"
-        putlog "CHATTR: $nick set flags for $target_handle on $target_chan: $new_flags"
-    } else {
+
+    # Aplicar flags
+    if {$apply_global} {
         if {[catch {chattr $target_handle $new_flags} err]} {
-            putserv "NOTICE $nick :Error setting flags: $err"
+            putserv "NOTICE $nick :Error: $err"
             return
         }
         putserv "NOTICE $nick :Set global flags for $target_handle: $new_flags"
-        putlog "CHATTR: $nick set global flags for $target_handle: $new_flags"
+        putlog   "CHATTR: $nick set global $new_flags for $target_handle"
+    } else {
+        if {[catch {chattr $target_handle $new_flags $apply_chan} err]} {
+            putserv "NOTICE $nick :Error on $apply_chan: $err"
+            return
+        }
+        putserv "NOTICE $nick :Set flags for $target_handle on $apply_chan: $new_flags"
+        putlog   "CHATTR: $nick set $new_flags for $target_handle on $apply_chan"
     }
 }
+
 
 proc pub_match {nick uhost hand chan text} {
     if {![is_voice_level $nick $chan]} {
@@ -2256,7 +2215,7 @@ proc pub_reload {nick uhost hand chan text} {
 proc pub_help {nick uhost hand chan text} {
     global customscript
     
-    putserv "NOTICE $nick :=== ALLINONE TCL HELP ==="
+    putserv "NOTICE $nick :=== ALLINONE SCRIPT v2.6 HELP ==="
     putserv "NOTICE $nick :Command chars: $customscript(cmdchars) | Use: !help <topic> for details"
     putserv "NOTICE $nick :"
     
@@ -2582,7 +2541,7 @@ foreach chan [channels] {
 # Bind all commands
 rebind_all_commands
 
-putlog "AllInOne Protection System v2.8 loaded successfully!"
+putlog "AllInOne Protection System v2.6 loaded successfully!"
 putlog "Features: Channel-specific word lists, refined permissions, 7 protections"
 putlog "Command characters: $customscript(cmdchars)"
 putlog "Data directory: $customscript(datadir)"
