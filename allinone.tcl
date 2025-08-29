@@ -65,6 +65,12 @@ array set default_settings {
     spam_time 30
     spam_punishment "ban"
     spam_bantime 30
+	
+	dnsbl 0
+	dnsbl_punishment "ban"
+	dnsbl_bantime 1440
+	dnsbl_zones "b.barracudacentral.org noptr.spamrats.com dnsbl.dronebl.org"
+	dnsbl_require_all 1
 }
 
 # Protected flags from protection
@@ -858,6 +864,124 @@ proc apply_punishment {nick uhost chan type reason} {
     }
 }
 
+proc is_valid_ip {ip} {
+    set octets [split $ip "."]
+    if {[llength $octets] != 4} return 0
+    
+    foreach octet $octets {
+        if {![string is integer $octet]} return 0
+        if {$octet < 0 || $octet > 255} return 0
+    }
+    return 1
+}
+
+# 4. VERSÃO ASSÍNCRONA MAIS EFICIENTE (RECOMENDADA):
+
+proc check_dnsbl_async {nick uhost hand chan} {
+    if {![get_channel_setting $chan dnsbl]} return
+    
+    set host [lindex [split $uhost "@"] 1]
+    if {![is_valid_ip $host]} return
+    
+    set zones_string [get_channel_setting $chan dnsbl_zones]
+    set zones [split $zones_string " "]
+    
+    # Criar contexto para callback
+    set context [list $nick $uhost $chan $zones [get_channel_setting $chan dnsbl_require_all]]
+    
+    # Iniciar verificações assíncronas
+    start_dnsbl_checks $host $context
+}
+
+proc start_dnsbl_checks {ip context} {
+    set octets [split $ip "."]
+    if {[llength $octets] != 4} return
+    
+    set rev_ip "[lindex $octets 3].[lindex $octets 2].[lindex $octets 1].[lindex $octets 0]"
+    set zones [lindex $context 3]
+    
+    # Usar array global para rastrear resultados
+    global dnsbl_results
+    set check_id "${ip}:[clock seconds]"
+    set dnsbl_results($check_id) [list $context {} 0 [llength $zones]]
+    
+    foreach zone $zones {
+        set query_hostname "${rev_ip}.${zone}"
+        # Usar timer para não bloquear
+        utimer 1 [list check_single_dnsbl $query_hostname $zone $check_id]
+    }
+    
+    # Timer para timeout da verificação completa
+    utimer 10 [list finalize_dnsbl_check $check_id]
+}
+
+proc check_single_dnsbl {query_hostname zone check_id} {
+    global dnsbl_results
+    
+    if {![info exists dnsbl_results($check_id)]} return
+    
+    set context [lindex $dnsbl_results($check_id) 0]
+    set listed_zones [lindex $dnsbl_results($check_id) 1]
+    set completed [lindex $dnsbl_results($check_id) 2]
+    set total [lindex $dnsbl_results($check_id) 3]
+    
+    # Verificar DNSBL
+    set is_listed 0
+    if {[catch {exec nslookup $query_hostname 2>/dev/null} result] == 0} {
+        if {![string match "*NXDOMAIN*" $result] && ![string match "*connection timed out*" $result]} {
+            set is_listed 1
+            lappend listed_zones $zone
+            set nick [lindex $context 0]
+            set ip [lindex [split [lindex $context 1] "@"] 1]
+            putlog "DNSBL HIT: $nick ($ip) listed in $zone"
+        }
+    }
+    
+    incr completed
+    set dnsbl_results($check_id) [list $context $listed_zones $completed $total]
+    
+    # Verificar se todas as consultas foram completadas
+    if {$completed >= $total} {
+        finalize_dnsbl_check $check_id
+    }
+}
+
+proc finalize_dnsbl_check {check_id} {
+    global dnsbl_results
+    
+    if {![info exists dnsbl_results($check_id)]} return
+    
+    set context [lindex $dnsbl_results($check_id) 0]
+    set listed_zones [lindex $dnsbl_results($check_id) 1]
+    set require_all [lindex $context 4]
+    
+    set nick [lindex $context 0]
+    set uhost [lindex $context 1]
+    set chan [lindex $context 2]
+    set total_zones [lindex $context 3]
+    
+    set listed_count [llength $listed_zones]
+    set should_punish 0
+    
+    if {$require_all} {
+        if {$listed_count == [llength $total_zones] && $listed_count > 0} {
+            set should_punish 1
+        }
+    } else {
+        if {$listed_count > 0} {
+            set should_punish 1
+        }
+    }
+    
+    if {$should_punish} {
+        set zones_text [join $listed_zones ", "]
+        apply_punishment $nick $uhost $chan "dnsbl" "Listed in DNSBL: $zones_text"
+    }
+    
+    # Limpeza
+    unset dnsbl_results($check_id)
+}
+
 # ========================================================================
 # EVENT BINDINGS
 # ========================================================================
@@ -881,6 +1005,7 @@ proc check_join {nick uhost hand chan} {
     
     check_badchan $nick $uhost $hand $chan
     check_spam_newuser $nick $uhost $hand $chan
+	check_dnsbl_async $nick $uhost $hand $chan
 }
 
 proc check_part {nick uhost hand chan reason} {
@@ -1687,6 +1812,12 @@ proc pub_protection {nick uhost hand chan text} {
         set spam_punishment [get_channel_setting $target_chan spam_punishment]
         set spam_bantime [get_channel_setting $target_chan spam_bantime]
         putserv "NOTICE $nick :spam: $spam_status (${spam_time}s check, $spamwords_count words) - punishment: $spam_punishment (${spam_bantime}min)"
+		
+		set dnsbls_count [llength [split [get_channel_setting $target_chan dnsbl_zones] " "]]
+		set dnsbl_status [get_channel_setting $target_chan dnsbl]
+		set dnsbl_punishment [get_channel_setting $target_chan dnsbl_punishment]
+		set dnsbl_bantime [get_channel_setting $target_chan dnsbl_bantime]
+		putserv "NOTICE $nick :dnsbl: $dnsbl_status ($dnsbls_count zones) - punishment: $dnsbl_punishment (${dnsbl_bantime}min)"
         
         return
     }
@@ -2256,6 +2387,7 @@ proc pub_help {nick uhost hand chan text} {
                 putserv "NOTICE $nick :Types: msgflood(maxmsg:5 msgtime:10s) repeatflood(maxrepeat:3 repeattime:60s)"
                 putserv "NOTICE $nick :caps(caps_percent:70% caps_minlen:10) spam(spam_time:300s)"
                 putserv "NOTICE $nick :badwords badpart badchan | Each: <type>_punishment <type>_bantime"
+				putserv "NOTICE $nick :dnsbl(zones, require_all, punishment, bantime)"
             }
             "lists" {
                 putserv "NOTICE $nick :=== WORD LISTS (PER CHANNEL) ==="
@@ -2295,7 +2427,7 @@ proc pub_help {nick uhost hand chan text} {
     
     putserv "NOTICE $nick :TOPICS: channel user info protection lists system permissions examples"
     putserv "NOTICE $nick :Quick: !addchan, !delchan, !op, !kick, !ban, !badwords, etc."
-    putserv "NOTICE $nick :7 protections: msgflood repeatflood caps spam badwords badpart badchan"
+    putserv "NOTICE $nick :7 protections: msgflood repeatflood caps spam badwords badpart badchan dnsbl"
     putserv "NOTICE $nick :Permissions: Global(n/m) Channel(n/m on chan) Op(o) Voice(v) | Works via /msg"
 }
 
@@ -2424,6 +2556,7 @@ proc msg_pub_unban {nick uhost hand text} {
     pub_unban $nick $uhost $hand $chan $mask
 }
 
+proc msg_pub_dnsbl {nick uhost hand text} { pub_dnsbl $nick $uhost $hand "" $text }
 proc msg_pub_chattr {nick uhost hand text} { pub_chattr $nick $uhost $hand "" $text }
 proc msg_pub_match {nick uhost hand text} { pub_match $nick $uhost $hand "" $text }
 proc msg_pub_adduser {nick uhost hand text} { pub_adduser $nick $uhost $hand "" $text }
@@ -2491,6 +2624,7 @@ proc rebind_all_commands {} {
 		update pub_update
 		addchan pub_addchan
 		delchan pub_delchan
+		dnsbl pub_dnsbl
     }
     
     # Create lookup table for aliases
@@ -2541,8 +2675,12 @@ foreach chan [channels] {
 # Bind all commands
 rebind_all_commands
 
-putlog "AllInOne Protection System v2.6 loaded successfully!"
-putlog "Features: Channel-specific word lists, refined permissions, 7 protections"
+putlog "---"
+putlog "AllInOne Protection System loaded successfully!"
+putlog "Features: Channel-specific word lists, refined permissions, 8 protections + DNSBL"
+putlog "Protections: msgflood, repeatflood, badwords, badpart, badchan, caps, spam, dnsbl"
 putlog "Command characters: $customscript(cmdchars)"
 putlog "Data directory: $customscript(datadir)"
+putlog "Update URL: $customscript(update_url)"
 putlog "Loaded configuration for [llength [channels]] channels"
+putlog "---"
