@@ -2318,6 +2318,23 @@ proc pub_update {nick uhost hand chan text} {
     putlog "UPDATE: Reload complete after update"
 }
 
+proc pub_rehash {nick uhost hand chan text} {
+    if {![is_global_admin $nick]} {
+        putserv "NOTICE $nick :Access denied. Global master/owner required."
+        return
+    }
+    putserv "NOTICE $nick :Rehashing bot configuration..."
+    putserv "REHASH"
+}
+
+proc pub_restart {nick uhost hand chan text} {
+    if {![is_global_admin $nick]} {
+        putserv "NOTICE $nick :Access denied. Global master/owner required."
+        return
+    }
+    putserv "NOTICE $nick :Restarting bot..."
+    putserv "RESTART"
+}
 
 proc pub_reload {nick uhost hand chan text} {
     if {![is_global_admin $nick]} {
@@ -2399,8 +2416,12 @@ proc pub_help {nick uhost hand chan text} {
             "system" {
                 putserv "NOTICE $nick :=== SYSTEM ==="
                 putserv "NOTICE $nick :char <chars> - Change command characters"
-                putserv "NOTICE $nick :save - Save all settings | reload - Reload settings"
-                putserv "NOTICE $nick :Current chars: $customscript(cmdchars)"
+                putserv "NOTICE $nick :restart - Restart the bot (global admin only)"
+				putserv "NOTICE $nick :rehash - Reload bot configuration (global admin only)"
+				putserv "NOTICE $nick :alias <add/del/list> - Manage command aliases"
+				putserv "NOTICE $nick :save - Save all settings | reload - Reload settings"
+				putserv "NOTICE $nick :update - Update the script"
+				putserv "NOTICE $nick :channels - List all joined channels"
             }
             "permissions" {
                 putserv "NOTICE $nick :=== PERMISSION LEVELS ==="
@@ -2556,6 +2577,8 @@ proc msg_pub_unban {nick uhost hand text} {
     pub_unban $nick $uhost $hand $chan $mask
 }
 
+proc msg_pub_restart {nick uhost hand text} { pub_restart $nick $uhost $hand "" $text }
+proc msg_pub_rehash {nick uhost hand text} { pub_rehash $nick $uhost $hand "" $text }
 proc msg_pub_dnsbl {nick uhost hand text} { pub_dnsbl $nick $uhost $hand "" $text }
 proc msg_pub_chattr {nick uhost hand text} { pub_chattr $nick $uhost $hand "" $text }
 proc msg_pub_match {nick uhost hand text} { pub_match $nick $uhost $hand "" $text }
@@ -2625,6 +2648,8 @@ proc rebind_all_commands {} {
 		addchan pub_addchan
 		delchan pub_delchan
 		dnsbl pub_dnsbl
+  		rehash pub_rehash
+		restart pub_restart
     }
     
     # Create lookup table for aliases
