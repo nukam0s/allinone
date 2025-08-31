@@ -1,5 +1,5 @@
 # ========================================================================
-# AllInOne Protection System v2.6 - Channel-Specific Word Lists
+# AllInOne Protection System - Channel-Specific Word Lists
 # ========================================================================
 # Features:
 # - Channel-specific badwords/badchans/spamwords lists
