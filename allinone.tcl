@@ -69,7 +69,7 @@ array set default_settings {
 	dnsbl 0
 	dnsbl_punishment "ban"
 	dnsbl_bantime 1440
-	dnsbl_zones "b.barracudacentral.org noptr.spamrats.com dnsbl.dronebl.org"
+	dnsbl_zones "b.barracudacentral.org, noptr.spamrats.com, dnsbl.dronebl.org, rbl.efnetrbl.org, zen.spamhaus.org, dnsbl.sorbs.net, cbl.abuseat.org, dnsbl.sectoor.de"
 	dnsbl_require_all 1
 }
 
