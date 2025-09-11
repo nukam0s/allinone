@@ -1281,12 +1281,10 @@ proc pub_chattr {nick uhost hand chan text} {
         putserv "NOTICE $nick :Access denied."
         return
     }
-
     set args           [split $text]
     set target_handle  [lindex $args 0]
     set new_flags      [lindex $args 1]
     set target_spec    [lindex $args 2]
-
     if {$target_handle == ""} {
         putserv "NOTICE $nick :Syntax: chattr <handle> <flags> [#channel|global]"
         return
@@ -1295,8 +1293,11 @@ proc pub_chattr {nick uhost hand chan text} {
         putserv "NOTICE $nick :User $target_handle not found."
         return
     }
-
-    # Determinar contexto de aplicação
+    
+    # Determinar contexto de aplicação - INICIALIZAR VARIÁVEIS
+    set apply_global 0
+    set apply_chan ""
+    
     if {$target_spec == "global"} {
         set apply_global 1
     } elseif {[string index $target_spec 0] == "#"} {
@@ -1304,6 +1305,9 @@ proc pub_chattr {nick uhost hand chan text} {
     } else {
         set apply_chan $chan
     }
+
+    # Log para diagnóstico (pode ser removido após debug)
+    putlog "DEBUG CHATTR: target_spec='$target_spec', apply_global=$apply_global, apply_chan='$apply_chan'"
 
     # Parse operações +X / -X
     set operations {}; set cur_op ""; set i 0
@@ -1317,7 +1321,6 @@ proc pub_chattr {nick uhost hand chan text} {
         }
         incr i
     }
-
     # Verificar permissões para cada operação
     set my_global  [chattr $hand]
     set my_chan    [chattr $hand $chan]
@@ -1326,13 +1329,18 @@ proc pub_chattr {nick uhost hand chan text} {
         set ok 0
         if {$apply_global} {
             # precisa de permissão global
-            if {[string match "*n*" $my_global]} { set ok 1 }
-            elseif {[string match "*m*" $my_global] && $flag ne "n"} { set ok 1 }
-            elseif {[string match "*o*" $my_global] && [lsearch -exact {v f} $flag] != -1} { set ok 1 }
+            if {[string match "*n*" $my_global]} { 
+                set ok 1 
+            } elseif {[string match "*m*" $my_global] && $flag ne "n"} { 
+                set ok 1 
+            } elseif {[string match "*o*" $my_global] && [lsearch -exact {v f} $flag] != -1} { 
+                set ok 1 
+            }
         } else {
             # precisa de permissão no canal
-            if {[string match "*n*" $my_chan] || [string match "*n*" $my_global]} { set ok 1 }
-            elseif {[string match "*m*" $my_chan] || [string match "*m*" $my_global]} {
+            if {[string match "*n*" $my_chan] || [string match "*n*" $my_global]} { 
+                set ok 1 
+            } elseif {[string match "*m*" $my_chan] || [string match "*m*" $my_global]} {
                 if {$flag ne "n"} { set ok 1 }
             } elseif {[string match "*o*" $my_chan] || [string match "*o*" $my_global]} {
                 if {[lsearch -exact {v f} $flag] != -1} { set ok 1 }
@@ -1347,12 +1355,11 @@ proc pub_chattr {nick uhost hand chan text} {
             return
         }
         # Impedir remoção de flags críticas próprias
-        if {$op starts_with "-" && $target_handle eq $hand && [lsearch -exact {n m o} $flag] != -1} {
+        if {[string match "-*" $op] && $target_handle eq $hand && [lsearch -exact {n m o} $flag] != -1} {
             putserv "NOTICE $nick :Cannot remove sua própria flag crítica '$flag'."
             return
         }
     }
-
     # Aplicar flags
     if {$apply_global} {
         if {[catch {chattr $target_handle $new_flags} err]} {
