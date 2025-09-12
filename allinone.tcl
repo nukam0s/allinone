@@ -1356,7 +1356,7 @@ proc pub_chattr {nick uhost hand chan text} {
         }
         # Impedir remoção de flags críticas próprias
         if {[string match "-*" $op] && $target_handle eq $hand && [lsearch -exact {n m o} $flag] != -1} {
-            putserv "NOTICE $nick :Cannot remove sua própria flag crítica '$flag'."
+            putserv "NOTICE $nick :Cannot remove your on flag '$flag'."
             return
         }
     }
@@ -2351,11 +2351,8 @@ proc pub_reload {nick uhost hand chan text} {
 
 proc pub_help {nick uhost hand chan text} {
     global customscript
-    
-    putserv "NOTICE $nick :=== ALLINONE SCRIPT HELP ==="
-    putserv "NOTICE $nick :Command chars: $customscript(cmdchars) | Use: !help <topic> for details"
-    putserv "NOTICE $nick :"
-    
+       
+        
     if {$text != ""} {
         set args [split $text]
         set first_word [lindex $args 0]
@@ -2426,6 +2423,8 @@ proc pub_help {nick uhost hand chan text} {
                 putserv "NOTICE $nick :!badwords list #soccer | !chaninfo | !copychan #src #dest"
             }
             default {
+				putserv "NOTICE $nick :=== ALLINONE SCRIPT HELP ==="
+    			putserv "NOTICE $nick :Command chars: $customscript(cmdchars) | Use: !help <topic> for details"
                 putserv "NOTICE $nick :Available topics: channel user info protection lists system permissions examples"
                 putserv "NOTICE $nick :Usage: !help <topic>"
             }
