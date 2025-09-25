@@ -86,7 +86,6 @@ array set command_aliases {}
 
 proc is_admin {nick chan} {
     set hand [nick2hand $nick $chan]
-    # Admin global OU admin do canal específico
     if {[matchattr $hand n] || [matchattr $hand m] ||
         [matchattr $hand n $chan] || [matchattr $hand m $chan]} {
         return 1
@@ -96,7 +95,6 @@ proc is_admin {nick chan} {
 
 proc is_op_level {nick chan} {
     set hand [nick2hand $nick $chan]
-    # Global OU específico do canal
     if {[matchattr $hand n] || [matchattr $hand m] || [matchattr $hand o] ||
         [matchattr $hand n $chan] || [matchattr $hand m $chan] || [matchattr $hand o $chan]} {
         return 1
@@ -106,7 +104,6 @@ proc is_op_level {nick chan} {
 
 proc is_voice_level {nick chan} {
     set hand [nick2hand $nick $chan]
-    # Global OU específico do canal
     if {[matchattr $hand n] || [matchattr $hand m] || [matchattr $hand o] || [matchattr $hand v] ||
         [matchattr $hand n $chan] || [matchattr $hand m $chan] || [matchattr $hand o $chan] || [matchattr $hand v $chan]} {
         return 1
@@ -115,7 +112,6 @@ proc is_voice_level {nick chan} {
 }
 
 
-# New permission functions for channel-specific security
 proc is_global_admin {nick} {
     set hand [nick2hand $nick]
     if {[matchattr $hand n] || [matchattr $hand m]} {
@@ -126,7 +122,6 @@ proc is_global_admin {nick} {
 
 proc is_admin_on_channel {nick target_chan} {
     set hand [nick2hand $nick $target_chan]
-    # Global OU específico do canal
     if {[matchattr $hand n] || [matchattr $hand m] ||
         [matchattr $hand n $target_chan] || [matchattr $hand m $target_chan]} {
         return 1
@@ -136,7 +131,6 @@ proc is_admin_on_channel {nick target_chan} {
 
 proc is_op_on_channel {nick target_chan} {
     set hand [nick2hand $nick $target_chan]
-    # Global OU específico do canal
     if {[matchattr $hand n] || [matchattr $hand m] || [matchattr $hand o] ||
         [matchattr $hand n $target_chan] || [matchattr $hand m $target_chan] || [matchattr $hand o $target_chan]} {
         return 1
@@ -257,23 +251,17 @@ proc del_channel_spamword {chan word} {
 # SAVE/LOAD FUNCTIONS FOR CHANNEL LISTS
 # ========================================================================
 proc fetch_and_write {url filePath} {
-    # Usa wget para descarregar via HTTPS
-    # Gera um ficheiro temporário no mesmo diretório
     set tmpfile "${filePath}.new"
 
-    # Descarrega com wget -q para quiet e -O para output
     if {[catch {exec wget -q -O $tmpfile $url} err]} {
         return -code error "Download error: $err"
     }
 
-    # Verifica existência do ficheiro temporário
     if {![file exists $tmpfile]} {
         return -code error "Download failed: no data"
     }
 
-    # Substitui o ficheiro original
     if {[catch {file rename -force $tmpfile $filePath} err2]} {
-        # Se falhar, apaga o tmpfile
         catch {file delete $tmpfile}
         return -code error "File write error: $err2"
     }
@@ -450,7 +438,6 @@ proc load_aliases {} {
     set file [file join $customscript(datadir) "aliases.conf"]
     
     if {![file exists $file]} {
-        # Se não existe arquivo, carrega aliases padrão
         array set command_aliases {
             o "op"
 			do "deop"
@@ -516,7 +503,6 @@ proc migrate_global_lists {} {
     
     set migrated 0
     
-    # Migrate global badwords if they exist
     if {[info exists badwords_list] && [llength $badwords_list] > 0} {
         foreach chan [channels] {
             foreach word $badwords_list {
@@ -528,7 +514,6 @@ proc migrate_global_lists {} {
         set migrated 1
     }
     
-    # Migrate global badchans if they exist
     if {[info exists badchans_list] && [llength $badchans_list] > 0} {
         foreach chan [channels] {
             foreach badchan $badchans_list {
@@ -540,7 +525,6 @@ proc migrate_global_lists {} {
         set migrated 1
     }
     
-    # Migrate global spamwords if they exist
     if {[info exists spamwords_list] && [llength $spamwords_list] > 0} {
         foreach chan [channels] {
             foreach word $spamwords_list {
@@ -651,7 +635,6 @@ proc check_msgflood {nick uhost hand chan text} {
         return
     }
     
-    # Clean old entries
     set newlist {}
     foreach timestamp $flood_array($key) {
         if {[expr {$now - $timestamp}] <= $msgtime} {
@@ -686,7 +669,6 @@ proc check_repeatflood {nick uhost hand chan text} {
         return
     }
     
-    # Clean old entries and count repeats
     set newlist {}
     set repeat_count 0
     foreach entry $repeat_array($key) {
@@ -826,11 +808,9 @@ proc apply_punishment {nick uhost chan type reason} {
     set punishment [get_channel_setting $chan "${type}_punishment"]
     set bantime [get_channel_setting $chan "${type}_bantime"]
     
-    # Verificar se o utilizador tem flags protegidas
     global protected_flags
     set hand [nick2hand $nick $chan]
     
-    # Verificar flags globais e do canal
     set user_flags [chattr $hand]
     append user_flags [chattr $hand $chan]
     
@@ -841,7 +821,6 @@ proc apply_punishment {nick uhost chan type reason} {
         }
     }
     
-    # Verificar se tem op/voice no canal (proteção adicional)
     if {[isop $nick $chan] || [isvoice $nick $chan]} {
         putlog "PROTECTION: Not punishing $nick ($type): has op/voice"
         return
@@ -875,7 +854,6 @@ proc is_valid_ip {ip} {
     return 1
 }
 
-# 4. VERSÃO ASSÍNCRONA MAIS EFICIENTE (RECOMENDADA):
 
 proc check_dnsbl_async {nick uhost hand chan} {
     if {![get_channel_setting $chan dnsbl]} return
@@ -886,10 +864,8 @@ proc check_dnsbl_async {nick uhost hand chan} {
     set zones_string [get_channel_setting $chan dnsbl_zones]
     set zones [split $zones_string " "]
     
-    # Criar contexto para callback
     set context [list $nick $uhost $chan $zones [get_channel_setting $chan dnsbl_require_all]]
     
-    # Iniciar verificações assíncronas
     start_dnsbl_checks $host $context
 }
 
@@ -900,18 +876,15 @@ proc start_dnsbl_checks {ip context} {
     set rev_ip "[lindex $octets 3].[lindex $octets 2].[lindex $octets 1].[lindex $octets 0]"
     set zones [lindex $context 3]
     
-    # Usar array global para rastrear resultados
     global dnsbl_results
     set check_id "${ip}:[clock seconds]"
     set dnsbl_results($check_id) [list $context {} 0 [llength $zones]]
     
     foreach zone $zones {
         set query_hostname "${rev_ip}.${zone}"
-        # Usar timer para não bloquear
         utimer 1 [list check_single_dnsbl $query_hostname $zone $check_id]
     }
     
-    # Timer para timeout da verificação completa
     utimer 10 [list finalize_dnsbl_check $check_id]
 }
 
@@ -925,7 +898,6 @@ proc check_single_dnsbl {query_hostname zone check_id} {
     set completed [lindex $dnsbl_results($check_id) 2]
     set total [lindex $dnsbl_results($check_id) 3]
     
-    # Verificar DNSBL
     set is_listed 0
     if {[catch {exec nslookup $query_hostname 2>/dev/null} result] == 0} {
         if {![string match "*NXDOMAIN*" $result] && ![string match "*connection timed out*" $result]} {
@@ -940,7 +912,6 @@ proc check_single_dnsbl {query_hostname zone check_id} {
     incr completed
     set dnsbl_results($check_id) [list $context $listed_zones $completed $total]
     
-    # Verificar se todas as consultas foram completadas
     if {$completed >= $total} {
         finalize_dnsbl_check $check_id
     }
@@ -1046,23 +1017,19 @@ proc pub_addchan {nick uhost hand chan text} {
         return
     }
     
-    # Check if already in channel
     if {[lsearch -exact [channels] $target_chan] != -1} {
         putserv "NOTICE $nick :Already in $target_chan"
         return
     }
     
-    # Add channel to Eggdrop
     if {$chan_key != ""} {
         channel add $target_chan {chanmode +nt idle-kick 0 key $chan_key}
     } else {
         channel add $target_chan {chanmode +nt idle-kick 0}
     }
     
-    # Join the channel
     putserv "JOIN $target_chan $chan_key"
     
-    # Initialize protection settings
     init_channel_protection $target_chan
     
     putserv "NOTICE $nick :Added and joined $target_chan"
@@ -1082,16 +1049,13 @@ proc pub_delchan {nick uhost hand chan text} {
         return
     }
     
-    # Check if in channel
     if {[lsearch -exact [channels] $target_chan] == -1} {
         putserv "NOTICE $nick :Not in $target_chan"
         return
     }
     
-    # Part the channel
     putserv "PART $target_chan :Removed by $nick"
     
-    # Remove from Eggdrop config
     channel remove $target_chan
     
     putserv "NOTICE $nick :Left and removed $target_chan"
@@ -1101,7 +1065,6 @@ proc pub_delchan {nick uhost hand chan text} {
 proc init_channel_protection {chan} {
     global default_settings channel_settings
     
-    # Initialize with default settings if not already set
     foreach setting [array names default_settings] {
         if {![info exists channel_settings($chan,$setting)]} {
             set channel_settings($chan,$setting) $default_settings($setting)
@@ -1294,7 +1257,6 @@ proc pub_chattr {nick uhost hand chan text} {
         return
     }
     
-    # Determinar contexto de aplicação - INICIALIZAR VARIÁVEIS
     set apply_global 0
     set apply_chan ""
     
@@ -1306,10 +1268,8 @@ proc pub_chattr {nick uhost hand chan text} {
         set apply_chan $chan
     }
 
-    # Log para diagnóstico (pode ser removido após debug)
     putlog "DEBUG CHATTR: target_spec='$target_spec', apply_global=$apply_global, apply_chan='$apply_chan'"
 
-    # Parse operações +X / -X
     set operations {}; set cur_op ""; set i 0
     while {$i < [string length $new_flags]} {
         set ch [string index $new_flags $i]
@@ -1321,14 +1281,12 @@ proc pub_chattr {nick uhost hand chan text} {
         }
         incr i
     }
-    # Verificar permissões para cada operação
     set my_global  [chattr $hand]
     set my_chan    [chattr $hand $chan]
     foreach op $operations {
         set flag [string index $op 1]
         set ok 0
         if {$apply_global} {
-            # precisa de permissão global
             if {[string match "*n*" $my_global]} { 
                 set ok 1 
             } elseif {[string match "*m*" $my_global] && $flag ne "n"} { 
@@ -1337,7 +1295,6 @@ proc pub_chattr {nick uhost hand chan text} {
                 set ok 1 
             }
         } else {
-            # precisa de permissão no canal
             if {[string match "*n*" $my_chan] || [string match "*n*" $my_global]} { 
                 set ok 1 
             } elseif {[string match "*m*" $my_chan] || [string match "*m*" $my_global]} {
@@ -1354,13 +1311,11 @@ proc pub_chattr {nick uhost hand chan text} {
             }
             return
         }
-        # Impedir remoção de flags críticas próprias
         if {[string match "-*" $op] && $target_handle eq $hand && [lsearch -exact {n m o} $flag] != -1} {
             putserv "NOTICE $nick :Cannot remove your on flag '$flag'."
             return
         }
     }
-    # Aplicar flags
     if {$apply_global} {
         if {[catch {chattr $target_handle $new_flags} err]} {
             putserv "NOTICE $nick :Error: $err"
@@ -1761,9 +1716,20 @@ proc pub_protection {nick uhost hand chan text} {
     set numargs [llength $args]
     
     set target_chan $chan
-    if {$numargs == 3 && [string index [lindex $args 2] 0] == "#"} {
-        set target_chan [lindex $args 2]
-    }
+	for {set i 0} {$i < $numargs} {incr i} {
+		set arg [lindex $args $i]
+		if {[string index $arg 0] == "#"} {
+			set target_chan $arg
+			break
+		}
+	}
+
+	if {$target_chan == "" && $numargs > 0} {
+		set first_arg [lindex $args 0]
+		if {[string index $first_arg 0] == "#"} {
+			set target_chan $first_arg
+		}
+	}
     
     if {![is_admin_on_channel $nick $target_chan]} {
         putserv "NOTICE $nick :Access denied on $target_chan."
@@ -1883,7 +1849,6 @@ proc pub_copychan {nick uhost hand chan text} {
     set source [lindex $args 0]
     set dest [lindex $args 1]
     
-    # Verificar se os canais existem
     if {![validchan $source]} {
         putserv "NOTICE $nick :Source channel $source not found."
         return
@@ -1908,7 +1873,6 @@ proc pub_copychan {nick uhost hand chan text} {
         incr count
     }
     
-    # Copy word lists
     global channel_badwords channel_badchans channel_spamwords
     
     if {[info exists channel_badwords($source)]} {
@@ -1974,94 +1938,210 @@ proc pub_resetchan {nick uhost hand chan text} {
 # ========================================================================
 
 proc pub_badwords {nick uhost hand chan text} {
+	set text [string map {\r "" \n "" \t ""} $text]
+	set args [split $text]
+	if {[llength $args] == 0} {
+		set action ""
+		set word ""
+		set target_chan $chan
+	} else {
+		set action [lindex $args 0]
+		set target_chan ""
+		set chan_idx -1
+
+		for {set i 1} {$i < [llength $args]} {incr i} {
+			set tok [string trim [lindex $args $i]]
+			if {$tok ne "" && [string index $tok 0] == "#"} {
+				set target_chan $tok
+				set chan_idx $i
+				break
+			}
+		}
+
+		if {$chan_idx != -1} {
+			if {$chan_idx > 1} {
+				set word [join [lrange $args 1 [expr {$chan_idx - 1}]] " "]
+			} else {
+				set word ""
+			}
+		} else {
+			if {[llength $args] > 1} {
+				set word [join [lrange $args 1 end] " "]
+			} else {
+				set word ""
+			}
+			set target_chan $chan
+		}
+	}
+
+	set target_chan [string trim $target_chan]
+	set target_chan [string map {\r "" \n "" \t ""} $target_chan]
+	if {$target_chan eq "" || [string index $target_chan 0] ne "#"} {
+		putserv "NOTICE $nick :Invalid channel: $target_chan"
+		return
+	}
+
+	if {![is_admin_on_channel $nick $target_chan]} {
+		putserv "NOTICE $nick :Access denied on $target_chan."
+		return
+	}
+
+	switch -nocase $action {
+		"add" {
+			if {$word == ""} {
+				putserv "NOTICE $nick :Syntax: badwords add <word> \[#channel\]"
+				return
+			}
+			if {[add_channel_badword $target_chan $word]} {
+				putserv "NOTICE $nick :Added '$word' to badwords for $target_chan"
+				putlog "BADWORDS: $nick added '$word' to badwords for $target_chan"
+			} else {
+				putserv "NOTICE $nick :Word '$word' already exists in badwords for $target_chan"
+			}
+		}
+		"del" - "delete" - "remove" {
+			if {$word == ""} {
+				putserv "NOTICE $nick :Syntax: badwords del <word> \[#channel\]"
+				return
+			}
+			if {[del_channel_badword $target_chan $word]} {
+				putserv "NOTICE $nick :Removed '$word' from badwords for $target_chan"
+				putlog "BADWORDS: $nick removed '$word' from badwords for $target_chan"
+			} else {
+				putserv "NOTICE $nick :Word '$word' not found in badwords for $target_chan"
+			}
+		}
+		"list" {
+			if {$word != "" && [string index $word 0] == "#"} {
+				set target_chan $word
+			}
+			set words [get_channel_badwords $target_chan]
+			if {[llength $words] == 0} {
+				putserv "NOTICE $nick :No badwords defined for $target_chan"
+			} else {
+				putserv "NOTICE $nick :Badwords for $target_chan ([llength $words]): [join $words {, }]"
+			}
+		}
+		"clear" {
+			if {[llength $args] > 1 && [string index [lindex $args 1] 0] == "#"} {
+				set target_chan [lindex $args 1]
+			}
+			global channel_badwords
+			set channel_badwords($target_chan) {}
+			save_channel_badwords $target_chan
+			putserv "NOTICE $nick :Cleared all badwords for $target_chan"
+			putlog "BADWORDS: $nick cleared all badwords for $target_chan"
+		}
+		default {
+			putserv "NOTICE $nick :Syntax: badwords <add|del|list|clear> \[word\] \[#channel\]"
+		}
+	}
+	}
+
+proc pub_badchans {nick uhost hand chan text} {
+    set text [string map {\r "" \n "" \t ""} $text]
     set args [split $text]
-    set action [lindex $args 0]
-    set word [lindex $args 1]
-    set target_chan $chan
-    
-    # Check if last argument is a channel
-    if {[llength $args] > 2 && [string index [lindex $args end] 0] == "#"} {
-        set target_chan [lindex $args end]
-        set word [join [lrange $args 1 end-1] " "]
-    }
-    
-    # Permission check
-    if {![is_admin_on_channel $nick $target_chan]} {
-        putserv "NOTICE $nick :Access denied on $target_chan."
+    if {[llength $args] == 0} {
+        putserv "NOTICE $nick :Syntax: badchans <add|del|list|clear> <#channel> \[#target_channel\]"
         return
     }
-    
-    switch -nocase $action {
-        "add" {
-            if {$word == ""} {
-                putserv "NOTICE $nick :Syntax: badwords add <word> \[#channel\]"
-                return
-            }
-            if {[add_channel_badword $target_chan $word]} {
-                putserv "NOTICE $nick :Added '$word' to badwords for $target_chan"
-                putlog "BADWORDS: $nick added '$word' to badwords for $target_chan"
-            } else {
-                putserv "NOTICE $nick :Word '$word' already exists in badwords for $target_chan"
-            }
+
+    set action [string tolower [lindex $args 0]]
+
+    set chan_tokens {}
+    for {set i 1} {$i < [llength $args]} {incr i} {
+        set tok [string trim [lindex $args $i]]
+        if {$tok ne "" && [string index $tok 0] == "#"} {
+            lappend chan_tokens $tok
         }
-        "del" - "delete" - "remove" {
-            if {$word == ""} {
-                putserv "NOTICE $nick :Syntax: badwords del <word> \[#channel\]"
-                return
-            }
-            if {[del_channel_badword $target_chan $word]} {
-                putserv "NOTICE $nick :Removed '$word' from badwords for $target_chan"
-                putlog "BADWORDS: $nick removed '$word' from badwords for $target_chan"
+    }
+
+    set badchan ""
+    set target_chan ""
+
+    switch -- $action {
+        "add" -
+        "del" -
+        "delete" -
+        "remove" {
+            if {[llength $chan_tokens] == 0} {
+                if {[llength $args] > 1} {
+                    set candidate [string trim [lindex $args 1]]
+                    if {[string index $candidate 0] == "#"} {
+                        set badchan $candidate
+                    } else {
+                        putserv "NOTICE $nick :Syntax: badchans $action <#channel> \[#target_channel\]"
+                        return
+                    }
+                } else {
+                    putserv "NOTICE $nick :Syntax: badchans $action <#channel> \[#target_channel\]"
+                    return
+                }
             } else {
-                putserv "NOTICE $nick :Word '$word' not found in badwords for $target_chan"
+                set badchan [lindex $chan_tokens 0]
+            }
+            if {[llength $chan_tokens] > 1} {
+                set target_chan [lindex $chan_tokens end]
+            } else {
+                if {[string index $chan 0] == "#"} {
+                    set target_chan $chan
+                } else {
+                    if {[llength $chan_tokens] == 1 && [llength $args] > 2} {
+                        putserv "NOTICE $nick :Missing target channel. Use: badchans $action <#badchannel> <#target_channel>"
+                        return
+                    } else {
+                        set target_chan $chan
+                    }
+                }
             }
         }
         "list" {
-            if {$word != "" && [string index $word 0] == "#"} {
-                set target_chan $word
-            }
-            set words [get_channel_badwords $target_chan]
-            if {[llength $words] == 0} {
-                putserv "NOTICE $nick :No badwords defined for $target_chan"
+            if {[llength $chan_tokens] == 0} {
+                if {[string index $chan 0] == "#"} {
+                    set target_chan $chan
+                } else {
+                    putserv "NOTICE $nick :Syntax: badchans list <#target_channel>"
+                    return
+                }
+            } elseif {[llength $chan_tokens] == 1} {
+                set target_chan [lindex $chan_tokens 0]
             } else {
-                putserv "NOTICE $nick :Badwords for $target_chan ([llength $words]): [join $words {, }]"
+                set badchan [lindex $chan_tokens 0]
+                set target_chan [lindex $chan_tokens end]
             }
         }
         "clear" {
-            if {[llength $args] > 1 && [string index [lindex $args 1] 0] == "#"} {
-                set target_chan [lindex $args 1]
+            if {[llength $chan_tokens] > 0} {
+                set target_chan [lindex $chan_tokens end]
+            } elseif {[string index $chan 0] == "#"} {
+                set target_chan $chan
+            } else {
+                putserv "NOTICE $nick :Syntax: badchans clear <#target_channel>"
+                return
             }
-            global channel_badwords
-            set channel_badwords($target_chan) {}
-            save_channel_badwords $target_chan
-            putserv "NOTICE $nick :Cleared all badwords for $target_chan"
-            putlog "BADWORDS: $nick cleared all badwords for $target_chan"
         }
         default {
-            putserv "NOTICE $nick :Syntax: badwords <add|del|list|clear> \[word\] \[#channel\]"
+            putserv "NOTICE $nick :Syntax: badchans <add|del|list|clear> <#channel> \[#target_channel\]"
+            return
         }
     }
-}
 
-proc pub_badchans {nick uhost hand chan text} {
-    set args [split $text]
-    set action [lindex $args 0]
-    set badchan [lindex $args 1]
-    set target_chan $chan
-    
-    if {[llength $args] > 2 && [string index [lindex $args end] 0] == "#"} {
-        set target_chan [lindex $args end]
-        set badchan [join [lrange $args 1 end-1] " "]
+    set badchan [string map {\r "" \n "" \t ""} [string trim $badchan]]
+    set target_chan [string map {\r "" \n "" \t ""} [string trim $target_chan]]
+
+    if {$target_chan eq "" || [string index $target_chan 0] ne "#"} {
+        putserv "NOTICE $nick :Invalid or missing target channel: $target_chan"
+        return
     }
-    
+
     if {![is_admin_on_channel $nick $target_chan]} {
         putserv "NOTICE $nick :Access denied on $target_chan."
         return
     }
-    
+
     switch -nocase $action {
         "add" {
-            if {$badchan == ""} {
+            if {$badchan eq "" || [string index $badchan 0] ne "#"} {
                 putserv "NOTICE $nick :Syntax: badchans add <#channel> \[#target_channel\]"
                 return
             }
@@ -2073,7 +2153,7 @@ proc pub_badchans {nick uhost hand chan text} {
             }
         }
         "del" - "delete" - "remove" {
-            if {$badchan == ""} {
+            if {$badchan eq "" || [string index $badchan 0] ne "#"} {
                 putserv "NOTICE $nick :Syntax: badchans del <#channel> \[#target_channel\]"
                 return
             }
@@ -2085,9 +2165,6 @@ proc pub_badchans {nick uhost hand chan text} {
             }
         }
         "list" {
-            if {$badchan != "" && [string index $badchan 0] == "#"} {
-                set target_chan $badchan
-            }
             set chans [get_channel_badchans $target_chan]
             if {[llength $chans] == 0} {
                 putserv "NOTICE $nick :No bad channels defined for $target_chan"
@@ -2096,37 +2173,67 @@ proc pub_badchans {nick uhost hand chan text} {
             }
         }
         "clear" {
-            if {[llength $args] > 1 && [string index [lindex $args 1] 0] == "#"} {
-                set target_chan [lindex $args 1]
-            }
             global channel_badchans
             set channel_badchans($target_chan) {}
             save_channel_badchans $target_chan
             putserv "NOTICE $nick :Cleared all bad channels for $target_chan"
             putlog "BADCHANS: $nick cleared all bad channels for $target_chan"
         }
-        default {
-            putserv "NOTICE $nick :Syntax: badchans <add|del|list|clear> \[#channel\] \[#target_channel\]"
-        }
     }
 }
 
+
 proc pub_spamwords {nick uhost hand chan text} {
+    set text [string map {\r "" \n "" \t ""} $text]
+
     set args [split $text]
-    set action [lindex $args 0]
-    set word [lindex $args 1]
-    set target_chan $chan
-    
-    if {[llength $args] > 2 && [string index [lindex $args end] 0] == "#"} {
-        set target_chan [lindex $args end]
-        set word [join [lrange $args 1 end-1] " "]
+    if {[llength $args] == 0} {
+        set action ""
+        set word ""
+        set target_chan $chan
+    } else {
+        set action [string tolower [lindex $args 0]]
+        set target_chan ""
+        set chan_idx -1
+
+        for {set i 1} {$i < [llength $args]} {incr i} {
+            set tok [string trim [lindex $args $i]]
+            if {$tok ne "" && [string index $tok 0] == "#"} {
+                set target_chan $tok
+                set chan_idx $i
+                break
+            }
+        }
+
+        if {$chan_idx != -1} {
+            if {$chan_idx > 1} {
+                set word [join [lrange $args 1 [expr {$chan_idx - 1}]] " "]
+            } else {
+                set word ""
+            }
+        } else {
+            if {[llength $args] > 1} {
+                set word [join [lrange $args 1 end] " "]
+            } else {
+                set word ""
+            }
+            set target_chan $chan
+        }
     }
-    
+
+    set word [string map {\r "" \n "" \t ""} [string trim $word]]
+    set target_chan [string map {\r "" \n "" \t ""} [string trim $target_chan]]
+
+    if {$target_chan eq "" || [string index $target_chan 0] ne "#"} {
+        putserv "NOTICE $nick :Invalid channel: $target_chan"
+        return
+    }
+
     if {![is_admin_on_channel $nick $target_chan]} {
         putserv "NOTICE $nick :Access denied on $target_chan."
         return
     }
-    
+
     switch -nocase $action {
         "add" {
             if {$word == ""} {
@@ -2179,6 +2286,7 @@ proc pub_spamwords {nick uhost hand chan text} {
     }
 }
 
+
 # ========================================================================
 # SYSTEM COMMANDS
 # ========================================================================
@@ -2201,7 +2309,6 @@ proc pub_alias {nick uhost hand chan text} {
                 return
             }
             
-            # Validar que o comando real existe
             set valid_commands {op deop voice devoice kick ban unban chattr match adduser deluser addhost delhost whois chaninfo chanset protection protectionall channels copychan resetchan badwords badchans spamwords alias char save reload help update addchan delchan}
             
             if {[lsearch -exact $valid_commands $real_cmd] == -1} {
@@ -2235,12 +2342,10 @@ proc pub_alias {nick uhost hand chan text} {
                 putserv "NOTICE $nick :No aliases defined."
                 return
             }
-            # aliases é uma lista {alias1 cmd1 alias2 cmd2 …}
             set pairs {}
             foreach {a c} $aliases {
                 lappend pairs "$a->$c"
             }
-            # Envia em grupos de 5 pares por linha
             set group_size 5
             for {set i 0} {$i < [llength $pairs]} {incr i $group_size} {
                 set slice [lrange $pairs $i [expr {$i + $group_size - 1}]]
@@ -2308,7 +2413,6 @@ proc pub_update {nick uhost hand chan text} {
         return
     }
     putserv "NOTICE $nick :Starting update..."
-    # Caminho absoluto do script
     set scriptPath [file normalize "scripts/allinone.tcl"]
     set url $::customscript(update_url)
     if {[catch {fetch_and_write $url $scriptPath} err]} {
@@ -2318,7 +2422,6 @@ proc pub_update {nick uhost hand chan text} {
     }
     putserv "NOTICE $nick :Update applied. Reloading..."
     putlog "UPDATE: Script updated from $url"
-    # Re-sourça o script atualizado (redefine todas as procs)
     source $scriptPath
     putserv "REHASH"
     putserv "NOTICE $nick :Reload complete."
@@ -2343,7 +2446,6 @@ proc pub_reload {nick uhost hand chan text} {
     putserv "NOTICE $nick :Reloaded configuration for $loaded_channels channels"
     putlog "RELOAD: $nick reloaded all configurations"
 
-    # Faz também um rehash no Eggdrop
     putserv "REHASH"
     putserv "NOTICE $nick :Eggdrop rehashed"
 }
@@ -2634,18 +2736,15 @@ proc rebind_all_commands {} {
 		dnsbl pub_dnsbl
     }
     
-    # Create lookup table for aliases
     array set cmd_to_proc {}
     foreach {cmd proc} $commands {
         set cmd_to_proc($cmd) $proc
     }
     
-    # Bind main commands
     foreach {cmd proc} $commands {
         bind_all_command $customscript(cmdchars) $cmd $proc
     }
     
-    # Bind aliases
     foreach alias [array names command_aliases] {
         set real_cmd $command_aliases($alias)
         if {[info exists cmd_to_proc($real_cmd)]} {
@@ -2665,10 +2764,8 @@ if {![file exists $customscript(datadir)]} {
     file mkdir $customscript(datadir)
 }
 
-# Run migration and load existing data
 migrate_global_lists
 
-# Load aliases
 load_aliases
 
 
@@ -2679,7 +2776,6 @@ foreach chan [channels] {
     load_channel_spamwords $chan
 }
 
-# Bind all commands
 rebind_all_commands
 
 putlog "---"
