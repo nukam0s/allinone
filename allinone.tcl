@@ -246,7 +246,7 @@ proc del_channel_spamword {chan word} {
     set index [lsearch -exact $current $word]
     if {$index != -1} {
         set new_list [lreplace $current $index $index]
-        set channel_spamwords($chan) $current
+        set channel_spamwords($chan) $new_list
         save_channel_spamwords $chan
         return 1
     }
@@ -2571,24 +2571,24 @@ proc msg_pub_deluser {nick uhost hand text} { pub_deluser $nick $uhost $hand "" 
 proc msg_pub_addhost {nick uhost hand text} { pub_addhost $nick $uhost $hand "" $text }
 proc msg_pub_delhost {nick uhost hand text} { pub_delhost $nick $uhost $hand "" $text }
 proc msg_pub_whois {nick uhost hand text} { pub_whois $nick $uhost $hand "" $text }
-proc msg_pub_chanset {nick uhost hand text} { pub_chanset $nick $uhost $hand $nick $text }
-proc msg_pub_chaninfo {nick uhost hand text} { pub_chaninfo $nick $uhost $hand $nick $text }
-proc msg_pub_protection {nick uhost hand text} { pub_protection $nick $uhost $hand $nick $text }
-proc msg_pub_protectionall {nick uhost hand text} { pub_protectionall $nick $uhost $hand $nick $text }
-proc msg_pub_channels {nick uhost hand text} { pub_channels $nick $uhost $hand $nick $text }
-proc msg_pub_copychan {nick uhost hand text} { pub_copychan $nick $uhost $hand $nick $text }
-proc msg_pub_resetchan {nick uhost hand text} { pub_resetchan $nick $uhost $hand $nick $text }
-proc msg_pub_badwords {nick uhost hand text} { pub_badwords $nick $uhost $hand $nick $text }
-proc msg_pub_badchans {nick uhost hand text} { pub_badchans $nick $uhost $hand $nick $text }
-proc msg_pub_spamwords {nick uhost hand text} { pub_spamwords $nick $uhost $hand $nick $text }
-proc msg_pub_char {nick uhost hand text} { pub_char $nick $uhost $hand $nick $text }
-proc msg_pub_save {nick uhost hand text} { pub_save $nick $uhost $hand $nick $text }
-proc msg_pub_reload {nick uhost hand text} { pub_reload $nick $uhost $hand $nick $text }
-proc msg_pub_help {nick uhost hand text} { pub_help $nick $uhost $hand $nick $text }
-proc msg_pub_alias {nick uhost hand text} { pub_alias $nick $uhost $hand $nick $text }
-proc msg_pub_update {nick uhost hand text} { pub_update $nick $uhost $hand $nick $text }
-proc msg_pub_addchan {nick uhost hand text} { pub_addchan $nick $uhost $hand $nick $text }
-proc msg_pub_delchan {nick uhost hand text} { pub_delchan $nick $uhost $hand $nick $text }
+proc msg_pub_chanset {nick uhost hand text} { pub_chanset $nick $uhost $hand "" $text }
+proc msg_pub_chaninfo {nick uhost hand text} { pub_chaninfo $nick $uhost $hand "" $text }
+proc msg_pub_protectionall {nick uhost hand text} { pub_protectionall $nick $uhost $hand "" $text }
+proc msg_pub_protection {nick uhost hand text} { pub_protection $nick $uhost $hand "" $text }
+proc msg_pub_channels {nick uhost hand text} { pub_channels $nick $uhost $hand "" $text }
+proc msg_pub_copychan {nick uhost hand text} { pub_copychan $nick $uhost $hand "" $text }
+proc msg_pub_resetchan {nick uhost hand text} { pub_resetchan $nick $uhost $hand "" $text }
+proc msg_pub_badwords {nick uhost hand text} { pub_badwords $nick $uhost $hand "" $text }
+proc msg_pub_badchans {nick uhost hand text} { pub_badchans $nick $uhost $hand "" $text }
+proc msg_pub_spamwords {nick uhost hand text} { pub_spamwords $nick $uhost $hand "" $text }
+proc msg_pub_char {nick uhost hand text} { pub_char $nick $uhost $hand "" $text }
+proc msg_pub_save {nick uhost hand text} { pub_save $nick $uhost $hand "" $text }
+proc msg_pub_reload {nick uhost hand text} { pub_reload $nick $uhost $hand "" $text }
+proc msg_pub_help {nick uhost hand text} { pub_help $nick $uhost $hand "" $text }
+proc msg_pub_alias {nick uhost hand text} { pub_alias $nick $uhost $hand "" $text }
+proc msg_pub_update {nick uhost hand text} { pub_update $nick $uhost $hand "" $text }
+proc msg_pub_addchan {nick uhost hand text} { pub_addchan $nick $uhost $hand "" $text }
+proc msg_pub_delchan {nick uhost hand text} { pub_delchan $nick $uhost $hand "" $text }
 
 
 # ========================================================================
