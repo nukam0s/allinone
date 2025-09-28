@@ -79,6 +79,8 @@ set protected_flags {n m o b f}
 # Command aliases system
 array set command_aliases {}
 
+# Channel-specific command disable
+array set channel_public_disabled {}
 
 # ========================================================================
 # PERMISSION FUNCTIONS
@@ -545,6 +547,60 @@ proc migrate_global_lists {} {
 # CHANNEL SETTINGS FUNCTIONS
 # ========================================================================
 
+proc is_public_commands_disabled {chan} {
+    global channel_public_disabled
+    if {[info exists channel_public_disabled($chan)]} {
+        return $channel_public_disabled($chan)
+    }
+    return 0
+}
+
+proc set_public_commands {chan enabled} {
+    global channel_public_disabled
+    set channel_public_disabled($chan) [expr {!$enabled}]
+    save_public_commands_config $chan
+}
+
+proc save_public_commands_config {chan} {
+    global customscript channel_public_disabled
+    set safe_chan [string map {"/" "_" "#" ""} $chan]
+    set file [file join $customscript(datadir) "pubcmds_${safe_chan}.txt"]
+    
+    if {[catch {open $file w} fd]} {
+        putlog "ERROR: Could not save public commands config for $chan"
+        return
+    }
+    
+    set disabled [expr {[info exists channel_public_disabled($chan)] ? $channel_public_disabled($chan) : 0}]
+    puts $fd "# Public commands disabled for $chan"
+    puts $fd "disabled $disabled"
+    close $fd
+}
+
+proc load_public_commands_config {chan} {
+    global customscript channel_public_disabled
+    set safe_chan [string map {"/" "_" "#" ""} $chan]
+    set file [file join $customscript(datadir) "pubcmds_${safe_chan}.txt"]
+    
+    if {![file exists $file]} return
+    
+    if {[catch {open $file r} fd]} {
+        putlog "ERROR: Could not read public commands config for $chan"
+        return
+    }
+    
+    while {[gets $fd line] >= 0} {
+        set line [string trim $line]
+        if {$line != "" && [string index $line 0] != "#"} {
+            set parts [split $line " "]
+            if {[lindex $parts 0] == "disabled"} {
+                set channel_public_disabled($chan) [lindex $parts 1]
+            }
+        }
+    }
+    close $fd
+}
+
 proc get_channel_setting {chan setting} {
     global channel_settings default_settings
     if {[info exists channel_settings($chan,$setting)]} {
@@ -992,16 +1048,73 @@ proc check_part {nick uhost hand chan reason} {
 proc bind_all_command {chars cmd procname} {
     foreach c [split $chars ""] {
         catch {unbind pub - "${c}${cmd}" $procname}
-        bind pub - "${c}${cmd}" $procname
+        bind pub - "${c}${cmd}" [list check_public_disabled $procname]
         
-        catch {unbind msg - "${c}${cmd}" "msg_$procname"}
-        bind msg - "${c}${cmd}" "msg_$procname"
+        catch {unbind msg - "${c}${cmd}" [list msg_$procname]}
+        bind msg - "${c}${cmd}" [list msg_$procname]
     }
 }
+
+
+proc check_public_disabled {original_proc nick uhost hand chan text} {
+    if {[is_public_commands_disabled $chan]} {
+        putserv "NOTICE $nick :Public commands are disabled in $chan. Use a private message to this bot instead."
+        return
+    }
+    $original_proc $nick $uhost $hand $chan $text
+}
+
 
 # ========================================================================
 # CHANNEL MANAGEMENT COMMANDS
 # ========================================================================
+
+proc pub_pubcmds {nick uhost hand chan text} {
+    set args [split $text]
+    set target_chan $chan
+
+    # Check if there are no arguments provided
+    if {[llength $args] == 0} {
+        putserv "NOTICE $nick :Usage: pubcmds <disable|enable|status> [#channel]"
+        return
+    }
+
+    # Check if a channel is specified as second argument
+    if {[llength $args] > 1 && [string index [lindex $args 1] 0] == "#"} {
+        set target_chan [lindex $args 1]
+    }
+
+    # Check if the user is admin on the target channel
+    if {![is_admin_on_channel $nick $target_chan]} {
+        putserv "NOTICE $nick :Access denied on $target_chan."
+        return
+    }
+
+    set action [string tolower [lindex $args 0]]
+
+    switch $action {
+        "disable" {
+            set_public_commands $target_chan 0
+            putserv "NOTICE $nick :Public commands disabled for $target_chan"
+            putlog "PUBCMDS: $nick disabled public commands for $target_chan"
+        }
+        "enable" {
+            set_public_commands $target_chan 1
+            putserv "NOTICE $nick :Public commands enabled for $target_chan"
+            putlog "PUBCMDS: $nick enabled public commands for $target_chan"
+        }
+        "status" {
+            set disabled [is_public_commands_disabled $target_chan]
+            set status [expr {$disabled ? "DISABLED" : "ENABLED"}]
+            putserv "NOTICE $nick :Public commands for $target_chan: $status"
+        }
+        default {
+            putserv "NOTICE $nick :Syntax: pubcmds <disable|enable|status> [#channel]"
+        }
+    }
+}
+
+
 proc pub_addchan {nick uhost hand chan text} {
     if {![is_global_admin $nick]} {
         putserv "NOTICE $nick :Access denied. Global master/owner required."
@@ -2508,6 +2621,7 @@ proc pub_help {nick uhost hand chan text} {
 				putserv "NOTICE $nick :save - Save all settings | reload - Reload settings"
 				putserv "NOTICE $nick :update - Update the script"
 				putserv "NOTICE $nick :channels - List all joined channels"
+				putserv "NOTICE $nick :pubcmds <enable/disable/status> [#chan] - Toggle public commands"
             }
             "permissions" {
                 putserv "NOTICE $nick :=== PERMISSION LEVELS ==="
@@ -2665,6 +2779,7 @@ proc msg_pub_unban {nick uhost hand text} {
     pub_unban $nick $uhost $hand $chan $mask
 }
 
+proc msg_pub_pubcmds {nick uhost hand text} { pub_pubcmds $nick $uhost $hand "" $text }
 proc msg_pub_dnsbl {nick uhost hand text} { pub_dnsbl $nick $uhost $hand "" $text }
 proc msg_pub_chattr {nick uhost hand text} { pub_chattr $nick $uhost $hand "" $text }
 proc msg_pub_match {nick uhost hand text} { pub_match $nick $uhost $hand "" $text }
@@ -2734,6 +2849,7 @@ proc rebind_all_commands {} {
 		addchan pub_addchan
 		delchan pub_delchan
 		dnsbl pub_dnsbl
+		pubcmds pub_pubcmds
     }
     
     array set cmd_to_proc {}
@@ -2774,6 +2890,7 @@ foreach chan [channels] {
     load_channel_badwords $chan
     load_channel_badchans $chan
     load_channel_spamwords $chan
+    load_public_commands_config $chan
 }
 
 rebind_all_commands
