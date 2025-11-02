@@ -79,7 +79,7 @@ Word lists support `*` (asterisk) as a wildcard for flexible matching.
 | `!chaninfo <#channel>` | Displays the complete configuration (Eggdrop and AllInOne) and status of the channel. | Op/Voice |
 | `!channels` | Lists all channels the bot is in and which protections are active on each. | Op/Voice |
 | `!chanset [#chan] <setting> [value]` | Alters native Eggdrop channel settings. | Channel Admin |
-| `!pubcmds <enable|disable|status> [#chan]` | Enables or disables the use of commands in public (forces MSG usage). | Channel Admin |
+| `!pubcmds enable/disable/status [#chan]` | Enables or disables the use of commands in public (forces MSG usage). | Channel Admin |
 
 ## 🔑 Permissions (Eggdrop Flags)
 
