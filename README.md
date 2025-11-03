@@ -10,9 +10,10 @@ The **AllInOne Protection System** is an advanced Tcl script for Eggdrop bots, d
 * **Channel-Specific Modular Protection:** Independent management of `badwords`, `badchans`, and `spamwords` for each channel.
 * **8 Protection Types:** Includes message flood, repeat flood, bad words, bad part, bad channel, caps, spam, and **DNSBL** (DNS Blacklist).
 * **Refined Permissions:** Granular access control based on global flags (`n/m`) and channel-specific flags (`n/m/o/v`).
-* **Flexible Aliases and Commands:** Supports multiple command prefixes (`!@#.`); configurable and persistent aliases (`aliases.conf`).
+* **Flexible Commands:** Supports multiple command prefixes (`!@#.`); configurable and persistent aliases (`aliases.conf`).
 * **Automatic Migration:** Existing global lists are automatically migrated to channel-specific lists on the first run.
 * **Auto-Update:** Use `!update` to fetch the latest version directly from GitHub and reload the script.
+* **Permanent Ban Command:** New `!pban` command for applying non-expiring bans (`MODE +b`).
 
 ## ⚙️ Installation
 
@@ -41,18 +42,21 @@ The default command prefix is `!`, but it also accepts `@`, `#`, and `.`. All co
 | `!copychan #source #dest` | Copies all settings and word lists from one channel to another. | Channel Admin |
 | `!resetchan [#chan]` | Resets all channel settings and lists to default values. | Channel Admin |
 
-#### Protection Configuration Options
+#### Protection Configuration Options (Defaults)
 
-| Protection Type | Key Settings | Default |
+| Protection Type | Key Settings | Default Punishment |
 | :--- | :--- | :--- |
-| **Message Flood** | `msgflood`, `maxmsg`, `msgtime` | 5 messages in 5s |
-| **Repeat Flood** | `repeatflood`, `maxrepeat`, `repeattime` | 3 repeats in 30s |
-| **Caps** | `caps`, `caps_percent`, `caps_minlen` | > 90% caps in messages > 15 chars |
-| **New User Spam**| `spam`, `spam_time` | Checks for spam words for 30s after join |
-| **DNSBL** | `dnsbl`, `dnsbl_zones`, `dnsbl_require_all` | Ban for IP listed in DNSBL zones |
-| **General** | `<type>_punishment`, `<type>_bantime` | Default punishment is `kick` and ban time is variable |
+| **Message Flood** | `msgflood`, `maxmsg` (5), `msgtime` (5s) | `kick` (10min ban) |
+| **Repeat Flood** | `repeatflood`, `maxrepeat` (3), `repeattime` (30s) | `kick` (10min ban) |
+| **Bad Words** | `badwords`, `badwords_punishment`, `badwords_bantime` (30min) | `kick` |
+| **Bad Part** | `badpart`, `badpart_punishment`, `badpart_bantime` (30min) | `kick` |
+| **Bad Chan (On Join)** | `badchan`, `badchan_punishment`, `badchan_bantime` (60min) | `ban` |
+| **Caps** | `caps`, `caps_percent` (90), `caps_minlen` (15) | `kick` (10min ban) |
+| **New User Spam** | `spam`, `spam_time` (30s) | `ban` (30min ban) |
+| **DNSBL** | `dnsbl`, `dnsbl_zones`, `dnsbl_require_all` | `ban` (1440min ban/24h) |
+*Note: Punishment is configurable to `kick`, `ban` (temporary ban) or `none`.*
 
-### 🛑 List Management (Word Lists)
+### 🛑 List Management (Per-Channel Word Lists)
 
 Word lists support `*` (asterisk) as a wildcard for flexible matching.
 
@@ -62,15 +66,18 @@ Word lists support `*` (asterisk) as a wildcard for flexible matching.
 | `!badchans <add|del|list|clear> [#badchan] [#chan]` | Prohibited channels: bans the user if they are on the prohibited channel upon joining. | Ex: `!badchans add #rival` |
 | `!spamwords <add|del|list|clear> [word] [#chan]` | Words that trigger the `spam` punishment if said by a newly joined user. | Ex: `!spamwords add freecoins` |
 
-### 💻 System Commands
+### 💻 Channel and User Management Commands
 
 | Command | Description | Permission |
 | :--- | :--- | :--- |
-| `!alias <add|del|list|reset>` | Manages or lists command aliases. | Global Admin |
-| `!char <chars>` | Sets the command characters (e.g., `!@#$`). | Global Admin |
-| `!save` | Manually saves all channel configurations and lists immediately. | Global Admin |
-| `!reload` | Reloads all configurations for all channels from disk. | Global Admin |
-| `!update` | Downloads the latest version of the script and reloads it. | Global Admin |
+| `!op <nick>` | Gives op to the nickname. | Op/Admin |
+| `!kick <nick> [reason]` | Kicks a user. | Op/Admin |
+| `!ban <nick/mask> [minutes]` | Applies a **temporary ban** (default: 30m). | Op/Admin |
+| `!pban <nick/mask> [reason]` | **(NEW)** Applies a **permanent ban** (`MODE +b`), with no expiration time. | Op/Admin |
+| `!unban <hostmask>` | Removes a ban. | Op/Admin |
+| `!chattr <handle> <flags> [#chan/global]` | Alters user flags. | Channel Admin |
+| `!whois <handle>` | Displays user flags and hostmasks information. | Op/Voice |
+| `!addchan <#channel> [key]` | Adds and joins a new channel (Requires `channel add` in config). | Global Admin |
 
 ### ℹ️ Information and Operation Commands
 
@@ -79,16 +86,21 @@ Word lists support `*` (asterisk) as a wildcard for flexible matching.
 | `!chaninfo <#channel>` | Displays the complete configuration (Eggdrop and AllInOne) and status of the channel. | Op/Voice |
 | `!channels` | Lists all channels the bot is in and which protections are active on each. | Op/Voice |
 | `!chanset [#chan] <setting> [value]` | Alters native Eggdrop channel settings. | Channel Admin |
-| `!pubcmds enable/disable/status [#chan]` | Enables or disables the use of commands in public (forces MSG usage). | Channel Admin |
+| `!pubcmds enable/disable/status [#chan]` | Toggles the use of commands in public (forces MSG usage). | Channel Admin |
+| `!alias <add|del|list|reset>` | Manages or lists command aliases. | Global Admin |
+| `!char <chars>` | Sets the command characters (e.g., `!@#$`). | Global Admin |
+| `!save` | Manually saves all channel configurations and lists immediately. | Global Admin |
+| `!reload` | Reloads all configurations for all channels from disk. | Global Admin |
+| `!update` | Downloads the latest version of the script and reloads it. | Global Admin |
 
 ## 🔑 Permissions (Eggdrop Flags)
 
 | Level | Flags | Access |
 | :--- | :--- | :--- |
-| **Global Admin** | `n` or `m` globally | Full access, including `!protectionall`, `!alias`, `!update`.
-| **Channel Admin** | `n` or `m` on the channel | Manages channel protections, lists (`!badwords`, etc.), and settings (`!chanset`).
-| **Op** | `o` on the channel | Basic channel commands (`!kick`, `!ban`, `!op`) and information viewing (`!chaninfo`).
-| **Voice** | `v` on the channel | View-only commands (`!channels`, `!chaninfo`).
+| **Global Admin** | `n` or `m` globally. | Full access, including `!protectionall`, `!alias`, `!update`, `!addchan`.
+| **Channel Admin** | `n` or `m` on the channel. | Manages channel protections, lists (`!badwords`, etc.), and settings (`!chanset`).
+| **Op** | `o` on the channel. | Basic channel commands (`!kick`, `!ban`, `!op`) and information viewing (`!chaninfo`).
+| **Voice** | `v` on the channel. | View-only commands (`!channels`, `!chaninfo`).
 
 ## 📂 Configuration Files
 
