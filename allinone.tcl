@@ -1348,6 +1348,45 @@ proc pub_unban {nick uhost hand chan text} {
     }
 }
 
+proc pub_pban {nick uhost hand chan text} {
+    if {![is_op_level $nick $chan]} {
+        putserv "NOTICE $nick :Access denied."
+        return
+    }
+    
+    if {$text == ""} {
+        putserv "NOTICE $nick :Syntax: pban <nick/mask> [reason]"
+        return
+    }
+    
+    set args [split $text]
+    set target [lindex $args 0]
+    set reason [join [lrange $args 1 end] " "]
+    
+    if {$reason == ""} { set reason "Permanently Banned by $nick" }
+    
+    # 1. Determine mask
+    if {[onchan $target $chan]} {
+        set target_uhost [getchanhost $target $chan]
+        # Padrão de máscara: *!*@host
+        set mask "*!*@[lindex [split $target_uhost "@"] 1]" 
+    } else {
+        # Usa a string como máscara (ex: *!*@d.c.u)
+        set mask $target
+    }
+    
+    # 2. Aplica o banimento permanente (apenas MODE +b, sem tempo de expiração)
+    putserv "MODE $chan +b $mask"
+    
+    # 3. Expulsa o utilizador se estiver presente
+    if {[onchan $target $chan]} {
+        putkick $chan $target $reason
+    }
+    
+    putlog "PBAN: $nick permanently banned $mask from $chan. Reason: $reason"
+    putserv "NOTICE $nick :Permanently banned $mask from $chan"
+}
+
 # ========================================================================
 # USER MANAGEMENT COMMANDS
 # ========================================================================
@@ -2658,6 +2697,26 @@ proc pub_help {nick uhost hand chan text} {
 # PRIVATE MESSAGE COMMANDS
 # ========================================================================
 
+proc msg_pub_pban {nick uhost hand text} { 
+    set args [split $text]
+    if {[llength $args] < 2} {
+        putserv "NOTICE $nick :Syntax: pban <nick/mask> <#channel> [reason]"
+        return
+    }
+    
+    set target [lindex $args 0]
+    set chan [lindex $args 1]
+    set reason [join [lrange $args 2 end] " "]
+    
+    if {![validchan $chan]} {
+        putserv "NOTICE $nick :Invalid channel: $chan"
+        return
+    }
+    
+    # Junta os argumentos para que o pub_pban processe corretamente
+    pub_pban $nick $uhost $hand $chan "$target $reason"
+}
+
 proc msg_pub_op {nick uhost hand text} { 
     set args [split $text]
     if {[llength $args] < 2} {
@@ -2850,6 +2909,7 @@ proc rebind_all_commands {} {
 		delchan pub_delchan
 		dnsbl pub_dnsbl
 		pubcmds pub_pubcmds
+		pban pub_pban
     }
     
     array set cmd_to_proc {}
