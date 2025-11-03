@@ -2616,6 +2616,7 @@ proc pub_help {nick uhost hand chan text} {
 				putserv "NOTICE $nick :voice/devoice <nick>     – Give or take voice"
 				putserv "NOTICE $nick :kick <nick> \[reason\]     – Kick a user"
 				putserv "NOTICE $nick :ban <nick/mask> \[mins\]   – Ban a user or mask"
+				putserv "NOTICE $nick :pban <nick/mask> \[reason\]  – Permanently ban a user or mask"
 				putserv "NOTICE $nick :unban <hostmask>         – Remove a ban"
 			}
             "user" {
