@@ -1365,20 +1365,15 @@ proc pub_pban {nick uhost hand chan text} {
     
     if {$reason == ""} { set reason "Permanently Banned by $nick" }
     
-    # 1. Determine mask
     if {[onchan $target $chan]} {
         set target_uhost [getchanhost $target $chan]
-        # Padrão de máscara: *!*@host
         set mask "*!*@[lindex [split $target_uhost "@"] 1]" 
     } else {
-        # Usa a string como máscara (ex: *!*@d.c.u)
         set mask $target
     }
     
-    # 2. Aplica o banimento permanente (apenas MODE +b, sem tempo de expiração)
     putserv "MODE $chan +b $mask"
     
-    # 3. Expulsa o utilizador se estiver presente
     if {[onchan $target $chan]} {
         putkick $chan $target $reason
     }
@@ -2713,7 +2708,6 @@ proc msg_pub_pban {nick uhost hand text} {
         return
     }
     
-    # Junta os argumentos para que o pub_pban processe corretamente
     pub_pban $nick $uhost $hand $chan "$target $reason"
 }
 
