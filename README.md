@@ -13,7 +13,6 @@ The **AllInOne Protection System** is an advanced Tcl script for Eggdrop bots, d
 * **Flexible Commands:** Supports multiple command prefixes (`!@#.`); configurable and persistent aliases (`aliases.conf`).
 * **Automatic Migration:** Existing global lists are automatically migrated to channel-specific lists on the first run.
 * **Auto-Update:** Use `!update` to fetch the latest version directly from GitHub and reload the script.
-* **Permanent Ban Command:** New `!pban` command for applying non-expiring bans (`MODE +b`).
 
 ## ⚙️ Installation
 
@@ -72,8 +71,7 @@ Word lists support `*` (asterisk) as a wildcard for flexible matching.
 | :--- | :--- | :--- |
 | `!op <nick>` | Gives op to the nickname. | Op/Admin |
 | `!kick <nick> [reason]` | Kicks a user. | Op/Admin |
-| `!ban <nick/mask> [minutes]` | Applies a **temporary ban** (default: 30m). | Op/Admin |
-| `!pban <nick/mask> [reason]` | Applies a **permanent ban** (`MODE +b`), with no expiration time. | Op/Admin |
+| `!ban <nick/mask> [minutes]` | Applies a **ban** (default: eggdrop set-ban time). | Op/Admin |
 | `!unban <hostmask>` | Removes a ban. | Op/Admin |
 | `!chattr <handle> <flags> [#chan/global]` | Alters user flags. | Channel Admin |
 | `!whois <handle>` | Displays user flags and hostmasks information. | Op/Voice |
