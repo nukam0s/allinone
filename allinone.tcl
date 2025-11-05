@@ -16,7 +16,7 @@ namespace eval ::customscript {
 }
 
 # Configuration
-set customscript(cmdchars) "!@#."
+set customscript(cmdchars) "!@.-"
 set customscript(datadir) "scripts/allinone"
 set customscript(update_url) "https://raw.githubusercontent.com/nukam0s/allinone/main/allinone.tcl"
 
@@ -1300,7 +1300,7 @@ proc pub_ban {nick uhost hand chan text} {
     }
     
     if {$text == ""} {
-        putserv "NOTICE $nick :Syntax: ban <nick/mask> \[minutes\]"
+        putserv "NOTICE $nick :Syntax: ban <nick/mask> [minutes] [reason] (0 for permanent)"
         return
     }
     
@@ -1308,23 +1308,60 @@ proc pub_ban {nick uhost hand chan text} {
     set target [lindex $args 0]
     set minutes [lindex $args 1]
     
-    if {$minutes == "" || ![string is integer $minutes]} {
-        set minutes 30
+    # Capture the reason which is EVERYTHING after the minutes argument (index 2 onwards)
+    set custom_reason [join [lrange $args 2 end] " "]
+
+    set duration_str ""
+    set ban_type "TEMPORARY"
+    
+    if {$minutes eq "0" && [string is integer $minutes]} {
+        # Permanent Ban (0 lifetime)
+        set duration_seconds 0
+        set ban_type "PERMANENT"
+        set duration_str "PERMANENTLY"
+    } elseif {$minutes eq ""} {
+        # Default Ban (uses channel's ban-time)
+        set default_minutes [channel get $chan ban-time]
+        set duration_seconds [expr {$default_minutes * 60}]
+        set duration_str "${default_minutes} minutes"
+    } elseif {[string is integer $minutes] && $minutes > 0} {
+        # Normal Temporary Ban
+        set duration_seconds [expr {$minutes * 60}]
+        set duration_str "${minutes} minutes"
+    } else {
+        putserv "NOTICE $nick :Invalid duration. Please use a number of minutes, or 0 for permanent."
+        return
     }
     
     if {[onchan $target $chan]} {
-        set uhost [getchanhost $target $chan]
-        set mask "*!*@[lindex [split $uhost "@"] 1]"
+        set target_uhost [getchanhost $target $chan]
+        set mask "*!*@[lindex [split $target_uhost "@"] 1]"
     } else {
         set mask $target
     }
     
-    newchanban $chan $mask $nick "Banned by $nick" [expr {$minutes * 60}]
-    if {[onchan $target $chan]} {
-        putkick $chan $target "Banned for $minutes minutes"
+    # 1. Build the ban reason for Eggdrop's internal list (newchanban)
+    if {$custom_reason ne ""} {
+        set newchanban_reason "Banned by $nick ($ban_type): $custom_reason"
+    } else {
+        set newchanban_reason "Banned by $nick ($ban_type)"
     }
-    putlog "BAN: $nick banned $mask from $chan for $minutes minutes"
-    putserv "NOTICE $nick :Banned $mask from $chan for $minutes minutes"
+    
+    # Apply the ban using the Eggdrop internal mechanism (newchanban)
+    newchanban $chan $mask $nick $newchanban_reason $duration_seconds
+    
+    # 2. Build the kick reason (what the user sees)
+    if {[onchan $target $chan]} {
+        if {$custom_reason ne ""} {
+            set kick_reason "Banned $duration_str: $custom_reason"
+        } else {
+            set kick_reason "Banned $duration_str"
+        }
+        putkick $chan $target $kick_reason
+    }
+    
+    putlog "BAN: $nick banned $mask from $chan for $duration_str. Reason: $newchanban_reason"
+    putserv "NOTICE $nick :Banned $mask from $chan for $duration_str"
 }
 
 proc pub_unban {nick uhost hand chan text} {
@@ -1348,39 +1385,6 @@ proc pub_unban {nick uhost hand chan text} {
     }
 }
 
-proc pub_pban {nick uhost hand chan text} {
-    if {![is_op_level $nick $chan]} {
-        putserv "NOTICE $nick :Access denied."
-        return
-    }
-    
-    if {$text == ""} {
-        putserv "NOTICE $nick :Syntax: pban <nick/mask> [reason]"
-        return
-    }
-    
-    set args [split $text]
-    set target [lindex $args 0]
-    set reason [join [lrange $args 1 end] " "]
-    
-    if {$reason == ""} { set reason "Permanently Banned by $nick" }
-    
-    if {[onchan $target $chan]} {
-        set target_uhost [getchanhost $target $chan]
-        set mask "*!*@[lindex [split $target_uhost "@"] 1]" 
-    } else {
-        set mask $target
-    }
-    
-    putserv "MODE $chan +b $mask"
-    
-    if {[onchan $target $chan]} {
-        putkick $chan $target $reason
-    }
-    
-    putlog "PBAN: $nick permanently banned $mask from $chan. Reason: $reason"
-    putserv "NOTICE $nick :Permanently banned $mask from $chan"
-}
 
 # ========================================================================
 # USER MANAGEMENT COMMANDS
@@ -2616,7 +2620,6 @@ proc pub_help {nick uhost hand chan text} {
 				putserv "NOTICE $nick :voice/devoice <nick>     – Give or take voice"
 				putserv "NOTICE $nick :kick <nick> \[reason\]     – Kick a user"
 				putserv "NOTICE $nick :ban <nick/mask> \[mins\]   – Ban a user or mask"
-				putserv "NOTICE $nick :pban <nick/mask> \[reason\]  – Permanently ban a user or mask"
 				putserv "NOTICE $nick :unban <hostmask>         – Remove a ban"
 			}
             "user" {
@@ -2692,25 +2695,6 @@ proc pub_help {nick uhost hand chan text} {
 # ========================================================================
 # PRIVATE MESSAGE COMMANDS
 # ========================================================================
-
-proc msg_pub_pban {nick uhost hand text} { 
-    set args [split $text]
-    if {[llength $args] < 2} {
-        putserv "NOTICE $nick :Syntax: pban <nick/mask> <#channel> [reason]"
-        return
-    }
-    
-    set target [lindex $args 0]
-    set chan [lindex $args 1]
-    set reason [join [lrange $args 2 end] " "]
-    
-    if {![validchan $chan]} {
-        putserv "NOTICE $nick :Invalid channel: $chan"
-        return
-    }
-    
-    pub_pban $nick $uhost $hand $chan "$target $reason"
-}
 
 proc msg_pub_op {nick uhost hand text} { 
     set args [split $text]
@@ -2904,7 +2888,6 @@ proc rebind_all_commands {} {
 		delchan pub_delchan
 		dnsbl pub_dnsbl
 		pubcmds pub_pubcmds
-		pban pub_pban
     }
     
     array set cmd_to_proc {}
