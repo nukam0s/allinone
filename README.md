@@ -1,58 +1,59 @@
-<artifact identifier="readme-md" type="text/markdown" title="README.md for GitHub">
 # AllInOne Protection System for Eggdrop
-Show Image
-Show Image
-Show Image
+
+[![Version](https://img.shields.io/badge/version-2.6-blue.svg)](https://github.com/nukam0s/allinone)
+[![Eggdrop](https://img.shields.io/badge/eggdrop-1.6%2B-green.svg)](https://www.eggheads.org/)
+[![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
+
 Complete protection and management system for Eggdrop bots with channel-specific word lists, refined permissions, and 8 types of protection including DNSBL.
-✨ Features
-🛡️ Protection System (8 Types)
 
-Message Flood - Protection against message flooding
-Repeat Flood - Detects repeated messages
-Bad Words - Filters prohibited words
-Bad Part - Controls part messages
-Bad Channels - Auto-ban users in prohibited channels
-Caps Lock - Excessive caps limit
-Spam - Detects spam from new users
-DNSBL - IP blacklist verification (multiple zones)
+## ✨ Features
 
-📋 Channel-Specific Lists
+### 🛡️ Protection System (8 Types)
+- **Message Flood** - Protection against message flooding
+- **Repeat Flood** - Detects repeated messages
+- **Bad Words** - Filters prohibited words
+- **Bad Part** - Controls part messages
+- **Bad Channels** - Auto-ban users in prohibited channels
+- **Caps Lock** - Excessive caps limit
+- **Spam** - Detects spam from new users
+- **DNSBL** - IP blacklist verification (multiple zones)
 
-Independent badwords per channel
-Badchans (prohibited channels) per channel
-Customizable spamwords per channel
-Individual configuration for each protection
+### 📋 Channel-Specific Lists
+- Independent badwords per channel
+- Badchans (prohibited channels) per channel
+- Customizable spamwords per channel
+- Individual configuration for each protection
 
-👥 Permission System
+### 👥 Permission System
+- **Global Admin** (n/m global) - Full access
+- **Channel Admin** (n/m on channel) - Channel management
+- **Op** (o) - User management
+- **Voice** (v) - Information commands
 
-Global Admin (n/m global) - Full access
-Channel Admin (n/m on channel) - Channel management
-Op (o) - User management
-Voice (v) - Information commands
+### ⚙️ Advanced Management
+- Public and private message commands
+- Customizable alias system
+- Configurable command characters
+- Auto-update via GitHub
+- Copy configurations between channels
+- Protected flags (n, m, o, b, f)
 
-⚙️ Advanced Management
+## 📥 Installation
 
-Public and private message commands
-Customizable alias system
-Configurable command characters
-Auto-update via GitHub
-Copy configurations between channels
-Protected flags (n, m, o, b, f)
-
-📥 Installation
-
-Download the script:
-
-bashcd ~/eggdrop/scripts/
+1. **Download the script:**
+```bash
+cd ~/eggdrop/scripts/
 wget https://raw.githubusercontent.com/nukam0s/allinone/main/allinone.tcl
+```
 
-Add to eggdrop.conf:
+2. **Add to eggdrop.conf:**
+```tcl
+source scripts/allinone.tcl
+```
 
-tclsource scripts/allinone.tcl
-
-Create data directory:
-
-bashmkdir -p ~/eggdrop/scripts/allinone
+3. **Create data directory:**
+```bash
+mkdir -p ~/eggdrop/scripts/allinone
 ```
 
 4. **Rehash the bot:**
@@ -229,16 +230,20 @@ The script downloads the latest version and reloads automatically.
 !protection dnsbl_require_all 0
 !protection dnsbl_punishment ban
 !protection dnsbl_bantime 1440
-⚠️ Important Notes
+```
 
-Protected Flags: Users with flags n, m, o, b, f are not affected by protections
-Ops/Voice: Users with op or voice in the channel are not punished
-DNSBL: Requires nslookup installed on the system
-Public Commands: Can be disabled per channel to use only via /msg
+## ⚠️ Important Notes
 
-🐛 Troubleshooting
-Script won't load
-bash# Check syntax
+- **Protected Flags**: Users with flags n, m, o, b, f are not affected by protections
+- **Ops/Voice**: Users with op or voice in the channel are not punished
+- **DNSBL**: Requires `nslookup` installed on the system
+- **Public Commands**: Can be disabled per channel to use only via /msg
+
+## 🐛 Troubleshooting
+
+### Script won't load
+```bash
+# Check syntax
 tclsh allinone.tcl
 
 # Check logs
@@ -250,21 +255,29 @@ tail -f ~/eggdrop/logs/eggdrop.log
 !protection                    # Check if active
 !channels                      # View status
 .console +d                    # Enable debug in partyline
-DNSBL not working
-bash# Test nslookup manually
+```
+
+### DNSBL not working
+```bash
+# Test nslookup manually
 nslookup 1.0.0.127.zen.spamhaus.org
-📞 Support
+```
 
-Issues: GitHub Issues
-Updates: GitHub Releases
+## 📞 Support
 
-📜 License
-MIT License - see LICENSE for details.
-🙏 Credits
+- **Issues**: [GitHub Issues](https://github.com/nukam0s/allinone/issues)
+- **Updates**: [GitHub Releases](https://github.com/nukam0s/allinone/releases)
+
+## 📜 License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+## 🙏 Credits
+
 Developed for the Eggdrop IRC community.
 
-Version: 2.6
-Compatibility: Eggdrop 1.6+
-Last Updated: 2025
-</artifact>
-Copie o conteúdo acima e guarde como README.md no teu repositório GitHub. O ficheiro está formatado corretamente com Markdown e pronto para upload!
+---
+
+**Version**: 2.6  
+**Compatibility**: Eggdrop 1.6+  
+**Last Updated**: 2025
