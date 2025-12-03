@@ -755,8 +755,40 @@ proc check_badwords {nick uhost hand chan text} {
     set normalized_text [string tolower $text]
     
     foreach word $badwords {
-        if {[string match "*$word*" $normalized_text]} {
-            apply_punishment $nick $uhost $chan "badwords" "Bad word detected: $word"
+        # Split por asteriscos para ter as palavras que devem aparecer em sequência
+        set parts [split $word "*"]
+        
+        # Remove entradas vazias
+        set clean_parts {}
+        foreach part $parts {
+            if {$part != ""} {
+                lappend clean_parts $part
+            }
+        }
+        
+        # Se não há partes, skip
+        if {[llength $clean_parts] == 0} continue
+        
+        # Procura sequencial: cada parte deve aparecer DEPOIS da anterior
+        set search_pos 0
+        set all_found 1
+        
+        foreach part $clean_parts {
+            set part_lower [string tolower $part]
+            set found_pos [string first $part_lower $normalized_text $search_pos]
+            
+            if {$found_pos == -1} {
+                # Não encontrou esta parte
+                set all_found 0
+                break
+            }
+            
+            # Encontrou! Próxima busca começa DEPOIS desta
+            set search_pos [expr {$found_pos + [string length $part_lower]}]
+        }
+        
+        if {$all_found} {
+            apply_punishment $nick $uhost $chan "badwords" "Bad word pattern detected: $word"
             return
         }
     }
