@@ -755,41 +755,24 @@ proc check_badwords {nick uhost hand chan text} {
     set normalized_text [string tolower $text]
     
     foreach word $badwords {
-        # Split por asteriscos para ter as palavras que devem aparecer em sequência
-        set parts [split $word "*"]
+        set word_lower [string tolower $word]
         
-        # Remove entradas vazias
-        set clean_parts {}
-        foreach part $parts {
-            if {$part != ""} {
-                lappend clean_parts $part
+        # Se não tem asteriscos, faz match simples
+        if {[string first "*" $word_lower] == -1} {
+            if {[string match "*${word_lower}*" $normalized_text]} {
+                apply_punishment $nick $uhost $chan "badwords" "Bad word detected: $word"
+                return
             }
-        }
-        
-        # Se não há partes, skip
-        if {[llength $clean_parts] == 0} continue
-        
-        # Procura sequencial: cada parte deve aparecer DEPOIS da anterior
-        set search_pos 0
-        set all_found 1
-        
-        foreach part $clean_parts {
-            set part_lower [string tolower $part]
-            set found_pos [string first $part_lower $normalized_text $search_pos]
+        } else {
+            # Tem asteriscos - converte para pattern matching
+            # Exemplo: "te*st" vira "*te*st*"
+            set pattern "*${word_lower}*"
+            set pattern [string map {"**" "*"} $pattern]
             
-            if {$found_pos == -1} {
-                # Não encontrou esta parte
-                set all_found 0
-                break
+            if {[string match $pattern $normalized_text]} {
+                apply_punishment $nick $uhost $chan "badwords" "Bad word pattern detected: $word"
+                return
             }
-            
-            # Encontrou! Próxima busca começa DEPOIS desta
-            set search_pos [expr {$found_pos + [string length $part_lower]}]
-        }
-        
-        if {$all_found} {
-            apply_punishment $nick $uhost $chan "badwords" "Bad word pattern detected: $word"
-            return
         }
     }
 }
