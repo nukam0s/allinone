@@ -756,16 +756,13 @@ proc check_badwords {nick uhost hand chan text} {
     
     foreach word $badwords {
         set word_lower [string tolower $word]
-        
-        # Se não tem asteriscos, faz match simples
+
         if {[string first "*" $word_lower] == -1} {
             if {[string match "*${word_lower}*" $normalized_text]} {
                 apply_punishment $nick $uhost $chan "badwords" "Bad word detected: $word"
                 return
             }
         } else {
-            # Tem asteriscos - converte para pattern matching
-            # Exemplo: "te*st" vira "*te*st*"
             set pattern "*${word_lower}*"
             set pattern [string map {"**" "*"} $pattern]
             
@@ -916,55 +913,66 @@ proc apply_punishment {nick uhost chan type reason} {
 
 proc is_valid_ip {ip} {
     set octets [split $ip "."]
-    if {[llength $octets] != 4} return 0
+    if {[llength $octets] != 4} { return 0 }
     
     foreach octet $octets {
-        if {![string is integer $octet]} return 0
-        if {$octet < 0 || $octet > 255} return 0
+        if {![string is integer -strict $octet]} { return 0 }
+        if {$octet < 0 || $octet > 255} { return 0 }
     }
     return 1
 }
 
-
 proc check_dnsbl_async {nick uhost hand chan} {
-    if {![get_channel_setting $chan dnsbl]} return
-    
-    set host [lindex [split $uhost "@"] 1]
-    if {![is_valid_ip $host]} return
-    
-    set zones_string [get_channel_setting $chan dnsbl_zones]
-	set zones_string [string map {", " " " "," " "} $zones_string]
-	set zones [split $zones_string " "]
-    
-    set require_all [get_channel_setting $chan dnsbl_require_all]
-	if {$require_all == ""} { set require_all 1 }
-	set context [list $nick $uhost $chan $zones $require_all]
-	
-    start_dnsbl_checks $host $context
+    if {[catch {
+        set dnsbl_enabled [get_channel_setting $chan dnsbl]
+        if {!$dnsbl_enabled} { return }  
+        
+        set host [lindex [split $uhost "@"] 1]
+        if {![is_valid_ip $host]} { return }
+        
+        set zones_string [get_channel_setting $chan dnsbl_zones]
+        set zones_string [string map {", " " " "," " "} $zones_string]
+        set zones [split $zones_string " "]
+        
+        set require_all [get_channel_setting $chan dnsbl_require_all]
+        if {$require_all == ""} { set require_all 1 }
+        
+        start_dnsbl_checks $host [list $nick $uhost $chan $zones $require_all]
+        
+    } err]} {
+        # Imprimimos apenas o erro ATUAL, ignorando o historico global
+        putlog "ERROR in check_dnsbl_async: $err"
+    }
 }
 
 proc start_dnsbl_checks {ip context} {
     set octets [split $ip "."]
-    if {[llength $octets] != 4} return
+    if {[llength $octets] != 4} { return }
     
     set rev_ip "[lindex $octets 3].[lindex $octets 2].[lindex $octets 1].[lindex $octets 0]"
+    
+    set nick [lindex $context 0]
+    set uhost [lindex $context 1]
+    set chan [lindex $context 2]
     set zones [lindex $context 3]
+    set require_all [lindex $context 4]
     
     global dnsbl_results
     set check_id "${ip}:[clock seconds]"
-    set dnsbl_results($check_id) [list $context {} 0 [llength $zones]]
+    
+    set new_context [list $nick $uhost $chan $zones $require_all]
+    set dnsbl_results($check_id) [list $new_context {} 0 [llength $zones]]
     
     foreach zone $zones {
         set query_hostname "${rev_ip}.${zone}"
-        utimer 1 [list check_single_dnsbl $query_hostname $zone $check_id]
+        after 100 [list check_single_dnsbl $query_hostname $zone $check_id]
     }
     
-    utimer 10 [list finalize_dnsbl_check $check_id]
+    after 10000 [list finalize_dnsbl_check $check_id]
 }
 
 proc check_single_dnsbl {query_hostname zone check_id} {
     global dnsbl_results
-    
     if {![info exists dnsbl_results($check_id)]} return
     
     set context [lindex $dnsbl_results($check_id) 0]
@@ -972,10 +980,9 @@ proc check_single_dnsbl {query_hostname zone check_id} {
     set completed [lindex $dnsbl_results($check_id) 2]
     set total [lindex $dnsbl_results($check_id) 3]
     
-    set is_listed 0
+    # Usamos o catch para capturar o SERVFAIL/NXDOMAIN do comando 'host'
     if {[catch {exec host -W 2 $query_hostname} result] == 0} {
-		if {![string match "*not found*" $result] && ![string match "*NXDOMAIN*" $result]} {
-            set is_listed 1
+        if {![string match "*not found*" $result] && ![string match "*NXDOMAIN*" $result]} {
             lappend listed_zones $zone
             set nick [lindex $context 0]
             set ip [lindex [split [lindex $context 1] "@"] 1]
@@ -1079,10 +1086,10 @@ proc check_part {nick uhost hand chan reason} {
 
 proc bind_all_command {chars cmd procname} {
     foreach c [split $chars ""] {
-        catch {unbind pub - "${c}${cmd}" $procname}
+        catch { unbind pub - "${c}${cmd}" [list check_public_disabled $procname] }
         bind pub - "${c}${cmd}" [list check_public_disabled $procname]
         
-        catch {unbind msg - "${c}${cmd}" [list msg_$procname]}
+        catch { unbind msg - "${c}${cmd}" [list msg_$procname] }
         bind msg - "${c}${cmd}" [list msg_$procname]
     }
 }
