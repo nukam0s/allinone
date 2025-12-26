@@ -118,7 +118,7 @@ mkdir -p ~/eggdrop/scripts/allinone
 ### DNSBL Protection
 ```
 !protection dnsbl 1                                    - Enable DNSBL
-!protection dnsbl_zones "zen.spamhaus.org, ..."       - Set zones
+!protection dnsbl_zones zen.spamhaus.org anotherzone andanother"       - Set zones
 !protection dnsbl_require_all 1                       - Require all zones
 !protection dnsbl_punishment ban                      - Punishment type
 !protection dnsbl_bantime 1440                        - 24h ban
