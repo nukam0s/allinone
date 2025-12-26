@@ -936,8 +936,10 @@ proc check_dnsbl_async {nick uhost hand chan} {
 	set zones_string [string map {", " " " "," " "} $zones_string]
 	set zones [split $zones_string " "]
     
-    set context [list $nick $uhost $chan $zones [get_channel_setting $chan dnsbl_require_all]]
-    
+    set require_all [get_channel_setting $chan dnsbl_require_all]
+	if {$require_all == ""} { set require_all 1 }
+	set context [list $nick $uhost $chan $zones $require_all]
+	
     start_dnsbl_checks $host $context
 }
 
