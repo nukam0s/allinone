@@ -933,7 +933,8 @@ proc check_dnsbl_async {nick uhost hand chan} {
     if {![is_valid_ip $host]} return
     
     set zones_string [get_channel_setting $chan dnsbl_zones]
-    set zones [split $zones_string " "]
+	set zones_string [string map {", " " " "," " "} $zones_string]
+	set zones [split $zones_string " "]
     
     set context [list $nick $uhost $chan $zones [get_channel_setting $chan dnsbl_require_all]]
     
@@ -970,8 +971,8 @@ proc check_single_dnsbl {query_hostname zone check_id} {
     set total [lindex $dnsbl_results($check_id) 3]
     
     set is_listed 0
-    if {[catch {exec nslookup $query_hostname 2>/dev/null} result] == 0} {
-        if {![string match "*NXDOMAIN*" $result] && ![string match "*connection timed out*" $result]} {
+    if {[catch {exec host -W 2 $query_hostname} result] == 0} {
+		if {![string match "*not found*" $result] && ![string match "*NXDOMAIN*" $result]} {
             set is_listed 1
             lappend listed_zones $zone
             set nick [lindex $context 0]
@@ -1022,6 +1023,20 @@ proc finalize_dnsbl_check {check_id} {
     
     # Limpeza
     unset dnsbl_results($check_id)
+}
+
+bind time - "0 * * * *" cleanup_old_dnsbl_results
+
+proc cleanup_old_dnsbl_results {min hour day month year} {
+    global dnsbl_results
+    set count 0
+    foreach key [array names dnsbl_results] {
+        incr count
+        unset dnsbl_results($key)
+    }
+    if {$count > 0} {
+        putlog "DNSBL: Cleaned $count stale results"
+    }
 }
 
 # ========================================================================
@@ -2456,6 +2471,23 @@ proc pub_spamwords {nick uhost hand chan text} {
     }
 }
 
+proc pub_dnsbl {nick uhost hand chan text} {
+    set target_chan $chan
+    if {$text != "" && [string index [lindex [split $text] 0] 0] == "#"} {
+        set target_chan [lindex [split $text] 0]
+    }
+    
+    if {![is_admin_on_channel $nick $target_chan]} {
+        putserv "NOTICE $nick :Access denied on $target_chan."
+        return
+    }
+    
+    putserv "NOTICE $nick :=== DNSBL CONFIG FOR $target_chan ==="
+    putserv "NOTICE $nick :Status: [get_channel_setting $target_chan dnsbl]"
+    putserv "NOTICE $nick :Zones: [get_channel_setting $target_chan dnsbl_zones]"
+    putserv "NOTICE $nick :Require all: [get_channel_setting $target_chan dnsbl_require_all]"
+    putserv "NOTICE $nick :Punishment: [get_channel_setting $target_chan dnsbl_punishment] ([get_channel_setting $target_chan dnsbl_bantime]min)"
+}
 
 # ========================================================================
 # SYSTEM COMMANDS
@@ -2863,6 +2895,7 @@ proc msg_pub_alias {nick uhost hand text} { pub_alias $nick $uhost $hand "" $tex
 proc msg_pub_update {nick uhost hand text} { pub_update $nick $uhost $hand "" $text }
 proc msg_pub_addchan {nick uhost hand text} { pub_addchan $nick $uhost $hand "" $text }
 proc msg_pub_delchan {nick uhost hand text} { pub_delchan $nick $uhost $hand "" $text }
+proc msg_pub_dnsbl {nick uhost hand text} { pub_dnsbl $nick $uhost $hand "" $text }
 
 
 # ========================================================================
@@ -2907,6 +2940,7 @@ proc rebind_all_commands {} {
 		delchan pub_delchan
 		dnsbl pub_dnsbl
 		pubcmds pub_pubcmds
+		dnsbl pub_dnsbl
     }
     
     array set cmd_to_proc {}
