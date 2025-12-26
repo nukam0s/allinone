@@ -226,7 +226,7 @@ The script downloads the latest version and reloads automatically.
 ### Scenario 3: Full DNSBL
 ```
 !protection dnsbl 1
-!protection dnsbl_zones "zen.spamhaus.org, dnsbl.dronebl.org, cbl.abuseat.org"
+!protection dnsbl_zones zen.spamhaus.org dnsbl.dronebl.org cbl.abuseat.org
 !protection dnsbl_require_all 0
 !protection dnsbl_punishment ban
 !protection dnsbl_bantime 1440
