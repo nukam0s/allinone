@@ -1962,7 +1962,11 @@ proc pub_protection {nick uhost hand chan text} {
     }
     
     set option [lindex $args 0]
-    set value [lindex $args 1]
+    set value [join [lrange $args 1 end]]
+    
+    if {[string index [lindex $args end] 0] == "#"} {
+        set value [join [lrange $args 1 [expr {[llength $args] - 2}]]]
+    }
     
     if {$value == ""} {
         putserv "NOTICE $nick :Current value of $option for $target_chan: [get_channel_setting $target_chan $option]"
