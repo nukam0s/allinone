@@ -924,12 +924,33 @@ proc is_valid_ip {ip} {
 
 proc check_dnsbl_async {nick uhost hand chan} {
     if {[catch {
+        # 1. Verifica se a proteção está ativa no canal
         set dnsbl_enabled [get_channel_setting $chan dnsbl]
         if {!$dnsbl_enabled} { return }  
         
-        set host [lindex [split $uhost "@"] 1]
-        if {![is_valid_ip $host]} { return }
+        # 2. Isola a parte do host (depois do @)
+        set raw_host [lindex [split $uhost "@"] 1]
+        set final_ip ""
+
+        # 3. Lógica de Resolução: IP direto ou Hostname
+        if {[is_valid_ip $raw_host]} {
+            # Se já for um IP válido, usamos diretamente
+            set final_ip $raw_host
+        } else {
+            # Se for um hostname, tentamos resolver via comando do sistema 'host'
+            if {[catch {exec host -t A $raw_host} dns_result] == 0} {
+                # Filtra a resposta para extrair apenas o endereço IPv4
+                if {[regexp {has address (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})} $dns_result -> found_ip]} {
+                    set final_ip $found_ip
+                    putlog "DNSBL: Hostname $raw_host resolvido para $final_ip"
+                }
+            }
+        }
+
+        # 4. Se não temos um IP válido (falha na resolução ou host inválido), aborta
+        if {$final_ip eq "" || ![is_valid_ip $final_ip]} { return }
         
+        # 5. Prepara as zonas de verificação
         set zones_string [get_channel_setting $chan dnsbl_zones]
         set zones_string [string map {", " " " "," " "} $zones_string]
         set zones [split $zones_string " "]
@@ -937,10 +958,11 @@ proc check_dnsbl_async {nick uhost hand chan} {
         set require_all [get_channel_setting $chan dnsbl_require_all]
         if {$require_all == ""} { set require_all 1 }
         
-        start_dnsbl_checks $host [list $nick $uhost $chan $zones $require_all]
+        # 6. Inicia os checks com o IP resolvido
+        start_dnsbl_checks $final_ip [list $nick $uhost $chan $zones $require_all]
         
     } err]} {
-        # Imprimimos apenas o erro ATUAL, ignorando o historico global
+        # Reporta apenas o erro atual para o log do bot
         putlog "ERROR in check_dnsbl_async: $err"
     }
 }
