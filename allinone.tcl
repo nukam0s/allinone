@@ -924,22 +924,16 @@ proc is_valid_ip {ip} {
 
 proc check_dnsbl_async {nick uhost hand chan} {
     if {[catch {
-        # 1. Verifica se a proteção está ativa no canal
         set dnsbl_enabled [get_channel_setting $chan dnsbl]
         if {!$dnsbl_enabled} { return }  
         
-        # 2. Isola a parte do host (depois do @)
         set raw_host [lindex [split $uhost "@"] 1]
         set final_ip ""
 
-        # 3. Lógica de Resolução: IP direto ou Hostname
         if {[is_valid_ip $raw_host]} {
-            # Se já for um IP válido, usamos diretamente
             set final_ip $raw_host
         } else {
-            # Se for um hostname, tentamos resolver via comando do sistema 'host'
             if {[catch {exec host -t A $raw_host} dns_result] == 0} {
-                # Filtra a resposta para extrair apenas o endereço IPv4
                 if {[regexp {has address (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})} $dns_result -> found_ip]} {
                     set final_ip $found_ip
                     putlog "DNSBL: Hostname $raw_host resolvido para $final_ip"
@@ -947,10 +941,8 @@ proc check_dnsbl_async {nick uhost hand chan} {
             }
         }
 
-        # 4. Se não temos um IP válido (falha na resolução ou host inválido), aborta
         if {$final_ip eq "" || ![is_valid_ip $final_ip]} { return }
         
-        # 5. Prepara as zonas de verificação
         set zones_string [get_channel_setting $chan dnsbl_zones]
         set zones_string [string map {", " " " "," " "} $zones_string]
         set zones [split $zones_string " "]
@@ -958,11 +950,9 @@ proc check_dnsbl_async {nick uhost hand chan} {
         set require_all [get_channel_setting $chan dnsbl_require_all]
         if {$require_all == ""} { set require_all 1 }
         
-        # 6. Inicia os checks com o IP resolvido
         start_dnsbl_checks $final_ip [list $nick $uhost $chan $zones $require_all]
         
     } err]} {
-        # Reporta apenas o erro atual para o log do bot
         putlog "ERROR in check_dnsbl_async: $err"
     }
 }
@@ -1002,7 +992,6 @@ proc check_single_dnsbl {query_hostname zone check_id} {
     set completed [lindex $dnsbl_results($check_id) 2]
     set total [lindex $dnsbl_results($check_id) 3]
     
-    # Usamos o catch para capturar o SERVFAIL/NXDOMAIN do comando 'host'
     if {[catch {exec host -W 2 $query_hostname} result] == 0} {
         if {![string match "*not found*" $result] && ![string match "*NXDOMAIN*" $result]} {
             lappend listed_zones $zone
@@ -1052,7 +1041,6 @@ proc finalize_dnsbl_check {check_id} {
         apply_punishment $nick $uhost $chan "dnsbl" "Listed in DNSBL: $zones_text"
     }
     
-    # Limpeza
     unset dnsbl_results($check_id)
 }
 
@@ -1134,18 +1122,15 @@ proc pub_pubcmds {nick uhost hand chan text} {
     set args [split $text]
     set target_chan $chan
 
-    # Check if there are no arguments provided
     if {[llength $args] == 0} {
         putserv "NOTICE $nick :Usage: pubcmds <disable|enable|status> [#channel]"
         return
     }
 
-    # Check if a channel is specified as second argument
     if {[llength $args] > 1 && [string index [lindex $args 1] 0] == "#"} {
         set target_chan [lindex $args 1]
     }
 
-    # Check if the user is admin on the target channel
     if {![is_admin_on_channel $nick $target_chan]} {
         putserv "NOTICE $nick :Access denied on $target_chan."
         return
@@ -1369,24 +1354,20 @@ proc pub_ban {nick uhost hand chan text} {
     set target [lindex $args 0]
     set minutes [lindex $args 1]
     
-    # Capture the reason which is EVERYTHING after the minutes argument (index 2 onwards)
     set custom_reason [join [lrange $args 2 end] " "]
 
     set duration_str ""
     set ban_type "TEMPORARY"
     
     if {$minutes eq "0" && [string is integer $minutes]} {
-        # Permanent Ban (0 lifetime)
         set duration_seconds 0
         set ban_type "PERMANENT"
         set duration_str "PERMANENTLY"
     } elseif {$minutes eq ""} {
-        # Default Ban (uses channel's ban-time)
         set default_minutes [channel get $chan ban-time]
         set duration_seconds [expr {$default_minutes * 60}]
         set duration_str "${default_minutes} minutes"
     } elseif {[string is integer $minutes] && $minutes > 0} {
-        # Normal Temporary Ban
         set duration_seconds [expr {$minutes * 60}]
         set duration_str "${minutes} minutes"
     } else {
@@ -1401,17 +1382,14 @@ proc pub_ban {nick uhost hand chan text} {
         set mask $target
     }
     
-    # 1. Build the ban reason for Eggdrop's internal list (newchanban)
     if {$custom_reason ne ""} {
         set newchanban_reason "Banned by $nick ($ban_type): $custom_reason"
     } else {
         set newchanban_reason "Banned by $nick ($ban_type)"
     }
     
-    # Apply the ban using the Eggdrop internal mechanism (newchanban)
     newchanban $chan $mask $nick $newchanban_reason $duration_seconds
     
-    # 2. Build the kick reason (what the user sees)
     if {[onchan $target $chan]} {
         if {$custom_reason ne ""} {
             set kick_reason "Banned $duration_str: $custom_reason"
@@ -1529,14 +1507,14 @@ proc pub_chattr {nick uhost hand chan text} {
         }
     }
     if {$apply_global} {
-        if {[catch {chattr $target_handle $new_flags} err]} {
+        if {[catch {chattr $target_handle |$new_flags} err]} {
             putserv "NOTICE $nick :Error: $err"
             return
         }
         putserv "NOTICE $nick :Set global flags for $target_handle: $new_flags"
         putlog   "CHATTR: $nick set global $new_flags for $target_handle"
     } else {
-        if {[catch {chattr $target_handle $new_flags $apply_chan} err]} {
+        if {[catch {chattr $target_handle |$new_flags $apply_chan} err]} {
             putserv "NOTICE $nick :Error on $apply_chan: $err"
             return
         }
