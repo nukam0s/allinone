@@ -1136,6 +1136,38 @@ proc check_public_disabled {original_proc nick uhost hand chan text} {
 # ========================================================================
 # CHANNEL MANAGEMENT COMMANDS
 # ========================================================================
+proc pub_mode {nick uhost hand chan text} {
+    if {![is_op_level $nick $chan]} {
+        putserv "NOTICE $nick :Access denied."
+        return
+    }
+    
+    if {$text == ""} {
+        putserv "NOTICE $nick :Syntax: mode <modes> \[args\] (Ex: +m, +o Nick, +k key)"
+        return
+    }
+    
+    putserv "MODE $chan $text"
+    putlog "MODE: $nick changed mode on $chan to: $text"
+}
+
+proc msg_pub_mode {nick uhost hand text} { 
+    set args [split $text]
+    if {[llength $args] < 2} {
+        putserv "NOTICE $nick :Syntax: mode <#channel> <modes> \[args\]"
+        return
+    }
+    
+    set chan [lindex $args 0]
+    set mode_args [join [lrange $args 1 end] " "]
+    
+    if {![validchan $chan]} {
+        putserv "NOTICE $nick :Invalid channel: $chan"
+        return
+    }
+    
+    pub_mode $nick $uhost $hand $chan $mode_args
+}
 
 proc pub_pubcmds {nick uhost hand chan text} {
     set args [split $text]
@@ -2552,7 +2584,7 @@ proc pub_alias {nick uhost hand chan text} {
                 return
             }
             
-            set valid_commands {op deop voice devoice kick ban unban chattr match adduser deluser addhost delhost whois chaninfo chanset protection protectionall channels copychan resetchan badwords badchans spamwords alias char save reload help update addchan delchan}
+            set valid_commands {op deop voice devoice kick ban unban mode chattr match adduser deluser addhost delhost whois chaninfo chanset protection protectionall channels copychan resetchan badwords badchans spamwords alias char save reload help update addchan delchan}
             
             if {[lsearch -exact $valid_commands $real_cmd] == -1} {
                 putserv "NOTICE $nick :Invalid command: $real_cmd"
@@ -2954,6 +2986,7 @@ proc rebind_all_commands {} {
         kick pub_kick
         ban pub_ban
         unban pub_unban
+		mode pub_mode
         chattr pub_chattr
         match pub_match
         adduser pub_adduser
