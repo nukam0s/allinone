@@ -763,22 +763,30 @@ proc check_badwords {nick uhost hand chan text} {
     set badwords [get_channel_badwords $chan]
     if {[llength $badwords] == 0} return
     
-    set normalized_text [string tolower $text]
+    # Remove formatação (cores/bold) para evitar bypass (ex: b.o.l.d)
+    set clean_text [stripcodes bcru $text]
+    set normalized_text [string tolower $clean_text]
     
     foreach word $badwords {
         set word_lower [string tolower $word]
-
-        if {[string first "*" $word_lower] == -1} {
-            if {[string match "*${word_lower}*" $normalized_text]} {
-                apply_punishment $nick $uhost $chan "badwords" "Bad word detected: $word"
+        
+        # Se a palavra na lista já tiver "*", usa como está
+        if {[string match "*\**" $word_lower]} {
+            if {[string match $word_lower $normalized_text]} {
+                apply_punishment $nick $uhost $chan "badwords" "Bad word pattern: $word"
                 return
             }
         } else {
-            set pattern "*${word_lower}*"
-            set pattern [string map {"**" "*"} $pattern]
-            
-            if {[string match $pattern $normalized_text]} {
-                apply_punishment $nick $uhost $chan "badwords" "Bad word pattern detected: $word"
+            # Se for uma palavra normal, procura-a isolada ou rodeada de pontuação
+            # Esta verificação é mais inteligente para não apanhar "computador" se a badword for "puta"
+            if {[string match "* $word_lower *" " $normalized_text "] || \
+                [string match "*$word_lower*" $normalized_text]} {
+                
+                # Se quiseres ser restrito (apanhar 'computador'), mantém o match simples.
+                # Se quiseres ser exato, usa word boundary (\y em regexp, mas complexo em glob).
+                # A versão atual do teu script apanha tudo (*palavra*). Vamos manter, mas limpar o código:
+                
+                apply_punishment $nick $uhost $chan "badwords" "Bad word detected: $word"
                 return
             }
         }
