@@ -10,6 +10,8 @@
 # - Automatic migration from global lists
 # ========================================================================
 package require http
+package require tls
+::http::register https 443 [list ::tls::socket -autoservername true]
 
 namespace eval ::customscript {
     variable version "2.6"
@@ -254,13 +256,22 @@ proc del_channel_spamword {chan word} {
 # ========================================================================
 proc fetch_and_write {url filePath} {
     set tmpfile "${filePath}.new"
-
-    if {[catch {exec wget -q -O $tmpfile $url} err]} {
+    
+    # Faz o download usando Tcl nativo (suporta HTTPS se tiveres o pacote TLS)
+    if {[catch {
+        set token [::http::geturl $url -timeout 10000]
+        set status [::http::status $token]
+        set data [::http::data $token]
+        ::http::cleanup $token
+        
+        if {$status ne "ok"} { error "Connection failed: $status" }
+        if {[string length $data] < 100} { error "File too small, verify URL" }
+        
+        set fd [open $tmpfile w]
+        puts -nonewline $fd $data
+        close $fd
+    } err]} {
         return -code error "Download error: $err"
-    }
-
-    if {![file exists $tmpfile]} {
-        return -code error "Download failed: no data"
     }
 
     if {[catch {file rename -force $tmpfile $filePath} err2]} {
@@ -1349,15 +1360,18 @@ proc pub_ban {nick uhost hand chan text} {
         putserv "NOTICE $nick :Syntax: ban <nick/mask> [minutes] [reason] (0 for permanent)"
         return
     }
-    
+    if {[isbotnick $target]} {
+        putserv "NOTICE $nick :Eu não me posso banir a mim mesmo!"
+        return
+    }
+    if {$target == $nick} {
+        putserv "NOTICE $nick :Não sejas masoquista. Não te vou banir."
+        return
+    }
     set args [split $text]
     set target [lindex $args 0]
     set possible_time [lindex $args 1]
-    
-    # LÓGICA MELHORADA:
-    # Verifica se o segundo argumento é um número inteiro.
-    # Se for número, assume que é o tempo e o resto é motivo.
-    # Se for texto, assume que é logo o motivo e usa o tempo default do canal.
+
     if {[string is integer -strict $possible_time]} {
         set minutes $possible_time
         set custom_reason [join [lrange $args 2 end] " "]
@@ -1369,13 +1383,11 @@ proc pub_ban {nick uhost hand chan text} {
     set duration_str ""
     set ban_type "TEMPORARY"
     
-    # Lógica de definição do tempo
     if {$minutes eq "0"} {
         set duration_seconds 0
         set ban_type "PERMANENT"
         set duration_str "PERMANENTLY"
     } elseif {$minutes eq ""} {
-        # Vai buscar o tempo padrão definido no eggdrop para o canal
         set default_minutes [channel get $chan ban-time]
         set duration_seconds [expr {$default_minutes * 60}]
         set duration_str "${default_minutes} minutes"
@@ -1383,12 +1395,10 @@ proc pub_ban {nick uhost hand chan text} {
         set duration_seconds [expr {$minutes * 60}]
         set duration_str "${minutes} minutes"
     } else {
-        # Esta linha agora é menos provável de acontecer devido à nova lógica acima
         putserv "NOTICE $nick :Invalid duration."
         return
     }
     
-    # Define a máscara (se o user estiver no canal ou se for dada manualmente)
     if {[onchan $target $chan]} {
         set target_uhost [getchanhost $target $chan]
         set mask "*!*@[lindex [split $target_uhost "@"] 1]"
@@ -1396,17 +1406,14 @@ proc pub_ban {nick uhost hand chan text} {
         set mask $target
     }
     
-    # Constrói a mensagem final do Ban
     if {$custom_reason ne ""} {
         set newchanban_reason "Banned by $nick: $custom_reason"
     } else {
         set newchanban_reason "Banned by $nick ($ban_type)"
     }
     
-    # Aplica o Ban
     newchanban $chan $mask $nick $newchanban_reason $duration_seconds
     
-    # Kicka o utilizador se estiver online
     if {[onchan $target $chan]} {
         if {$custom_reason ne ""} {
             set kick_reason "Banned $duration_str: $custom_reason"
