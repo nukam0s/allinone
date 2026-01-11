@@ -1011,7 +1011,7 @@ proc check_single_dnsbl {query_hostname zone check_id} {
     set completed [lindex $dnsbl_results($check_id) 2]
     set total [lindex $dnsbl_results($check_id) 3]
     
-    if {[catch {exec host -W 2 $query_hostname} result] == 0} {
+    if {[catch {exec host -W 1 -t A $query_hostname} result] == 0} {
         if {![string match "*not found*" $result] && ![string match "*NXDOMAIN*" $result]} {
             lappend listed_zones $zone
             set nick [lindex $context 0]
