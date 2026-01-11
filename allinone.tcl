@@ -2711,7 +2711,7 @@ proc pub_help {nick uhost hand chan text} {
 				putserv "NOTICE $nick :op/deop <nick>           – Give or take ops"
 				putserv "NOTICE $nick :voice/devoice <nick>     – Give or take voice"
 				putserv "NOTICE $nick :kick <nick> \[reason\]     – Kick a user"
-				putserv "NOTICE $nick :ban <nick/mask> \[mins\]   – Ban a user or mask"
+				putserv "NOTICE $nick :ban <nick/mask> \[mins\] [reason]   – Ban a user or mask"
 				putserv "NOTICE $nick :unban <hostmask>         – Remove a ban"
 			}
             "user" {
@@ -2877,7 +2877,7 @@ proc msg_pub_kick {nick uhost hand text} {
 proc msg_pub_ban {nick uhost hand text} { 
     set args [split $text]
     if {[llength $args] < 2} {
-        putserv "NOTICE $nick :Syntax: ban <nick/mask> <#channel> \[minutes\]"
+        putserv "NOTICE $nick :Syntax: ban <nick/mask> <#channel> \[reason\] \[minutes\]"
         return
     }
     set target [lindex $args 0]
