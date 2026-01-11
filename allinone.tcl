@@ -1352,18 +1352,30 @@ proc pub_ban {nick uhost hand chan text} {
     
     set args [split $text]
     set target [lindex $args 0]
-    set minutes [lindex $args 1]
+    set possible_time [lindex $args 1]
     
-    set custom_reason [join [lrange $args 2 end] " "]
+    # LÓGICA MELHORADA:
+    # Verifica se o segundo argumento é um número inteiro.
+    # Se for número, assume que é o tempo e o resto é motivo.
+    # Se for texto, assume que é logo o motivo e usa o tempo default do canal.
+    if {[string is integer -strict $possible_time]} {
+        set minutes $possible_time
+        set custom_reason [join [lrange $args 2 end] " "]
+    } else {
+        set minutes ""
+        set custom_reason [join [lrange $args 1 end] " "]
+    }
 
     set duration_str ""
     set ban_type "TEMPORARY"
     
-    if {$minutes eq "0" && [string is integer $minutes]} {
+    # Lógica de definição do tempo
+    if {$minutes eq "0"} {
         set duration_seconds 0
         set ban_type "PERMANENT"
         set duration_str "PERMANENTLY"
     } elseif {$minutes eq ""} {
+        # Vai buscar o tempo padrão definido no eggdrop para o canal
         set default_minutes [channel get $chan ban-time]
         set duration_seconds [expr {$default_minutes * 60}]
         set duration_str "${default_minutes} minutes"
@@ -1371,10 +1383,12 @@ proc pub_ban {nick uhost hand chan text} {
         set duration_seconds [expr {$minutes * 60}]
         set duration_str "${minutes} minutes"
     } else {
-        putserv "NOTICE $nick :Invalid duration. Please use a number of minutes, or 0 for permanent."
+        # Esta linha agora é menos provável de acontecer devido à nova lógica acima
+        putserv "NOTICE $nick :Invalid duration."
         return
     }
     
+    # Define a máscara (se o user estiver no canal ou se for dada manualmente)
     if {[onchan $target $chan]} {
         set target_uhost [getchanhost $target $chan]
         set mask "*!*@[lindex [split $target_uhost "@"] 1]"
@@ -1382,14 +1396,17 @@ proc pub_ban {nick uhost hand chan text} {
         set mask $target
     }
     
+    # Constrói a mensagem final do Ban
     if {$custom_reason ne ""} {
-        set newchanban_reason "Banned by $nick ($ban_type): $custom_reason"
+        set newchanban_reason "Banned by $nick: $custom_reason"
     } else {
         set newchanban_reason "Banned by $nick ($ban_type)"
     }
     
+    # Aplica o Ban
     newchanban $chan $mask $nick $newchanban_reason $duration_seconds
     
+    # Kicka o utilizador se estiver online
     if {[onchan $target $chan]} {
         if {$custom_reason ne ""} {
             set kick_reason "Banned $duration_str: $custom_reason"
