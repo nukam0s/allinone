@@ -475,7 +475,7 @@ proc load_aliases {} {
             h "help"
 			ajuda "help"
 			prot "protection"
-			fh "find_host"
+			fh "findhost"
         }
         save_aliases
         putlog "Created default command aliases"
@@ -2644,7 +2644,7 @@ proc pub_alias {nick uhost hand chan text} {
                 return
             }
             
-            set valid_commands {op deop voice devoice kick ban unban mode chattr match adduser deluser addhost delhost whois chaninfo chanset protection protectionall channels copychan resetchan badwords badchans spamwords alias char save reload help update addchan delchan}
+            set valid_commands {op deop voice devoice kick ban unban mode chattr match adduser deluser addhost delhost whois chaninfo chanset protection protectionall channels copychan resetchan badwords badchans spamwords alias char save reload help update addchan delchan findhost}
             
             if {[lsearch -exact $valid_commands $real_cmd] == -1} {
                 putserv "NOTICE $nick :Invalid command: $real_cmd"
