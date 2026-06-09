@@ -1126,7 +1126,7 @@ proc bind_all_command {chars cmd procname} {
 
 
 proc check_public_disabled {original_proc nick uhost hand chan text} {
-    if {[is_public_commands_disabled $chan]} {
+    if {[is_public_commands_disabled $chan] && $original_proc ne "pub_pubcmds"} {
         putserv "NOTICE $nick :Public commands are disabled in $chan. Use a private message to this bot instead."
         return
     }
