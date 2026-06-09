@@ -10,8 +10,8 @@
 # - Automatic migration from global lists
 # ========================================================================
 package require http
-package require tls
-::http::register https 443 [list ::tls::socket -autoservername true]
+catch {package require tls}
+catch {::http::register https 443 [list ::tls::socket -autoservername true]}
 
 namespace eval ::customscript {
     variable version "2.6"
