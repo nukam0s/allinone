@@ -475,6 +475,7 @@ proc load_aliases {} {
             h "help"
 			ajuda "help"
 			prot "protection"
+			fh "find_host"
         }
         save_aliases
         putlog "Created default command aliases"
@@ -1492,6 +1493,38 @@ proc pub_unban {nick uhost hand chan text} {
 # ========================================================================
 # USER MANAGEMENT COMMANDS
 # ========================================================================
+
+proc pub_findhost {nick uhost hand chan text} {
+    if {![is_admin $nick $chan]} {
+        putserv "NOTICE $nick :Access denied."
+        return
+    }
+    if {$text == ""} {
+        putserv "NOTICE $nick :Syntax: findhost <mask>"
+        return
+    }
+    
+    set mask $text
+    set found {}
+    
+    foreach handle [userlist] {
+        set hosts [getuser $handle HOSTS]
+        foreach h $hosts {
+            if {[string match -nocase $mask $h] || [string match -nocase $h $mask]} {
+                lappend found "$handle ($h)"
+            }
+        }
+    }
+    
+    if {[llength $found] == 0} {
+        putserv "NOTICE $nick :No users found matching: $mask"
+    } else {
+        putserv "NOTICE $nick :Found [llength $found] match(es) for '$mask':"
+        foreach f $found {
+            putserv "NOTICE $nick :  $f"
+        }
+    }
+}
 
 proc pub_chattr {nick uhost hand chan text} {
     if {![is_admin $nick $chan]} {
@@ -2969,6 +3002,8 @@ proc msg_pub_update {nick uhost hand text} { pub_update $nick $uhost $hand "" $t
 proc msg_pub_addchan {nick uhost hand text} { pub_addchan $nick $uhost $hand "" $text }
 proc msg_pub_delchan {nick uhost hand text} { pub_delchan $nick $uhost $hand "" $text }
 proc msg_pub_dnsbl {nick uhost hand text} { pub_dnsbl $nick $uhost $hand "" $text }
+proc msg_pub_findhost {nick uhost hand text} { pub_findhost $nick $uhost $hand "" $text }
+
 
 
 # ========================================================================
@@ -3015,6 +3050,7 @@ proc rebind_all_commands {} {
 		dnsbl pub_dnsbl
 		pubcmds pub_pubcmds
 		dnsbl pub_dnsbl
+		findhost pub_findhost
     }
     
     array set cmd_to_proc {}
