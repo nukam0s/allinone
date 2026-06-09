@@ -973,7 +973,7 @@ proc check_dnsbl_async {nick uhost hand chan} {
         start_dnsbl_checks $final_ip [list $nick $uhost $chan $zones $require_all]
         
     } err]} {
-        putlog "ERROR in check_dnsbl_async: $err"
+        putlog "ERROR in check_dnsbl_async: $err | $::errorInfo"
     }
 }
 
