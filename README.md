@@ -111,6 +111,7 @@ mkdir -p ~/eggdrop/scripts/allinone
 !chattr handle flags [#channel] - Change flags
 !whois handle                  - User information
 !match flags [#channel]        - List users with flags
+!findhost <mask>               - Find user by hostmask (supports wildcards)
 ```
 
 ## 🔧 Detailed Configuration
