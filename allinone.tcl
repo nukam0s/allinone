@@ -2097,6 +2097,33 @@ proc pub_protection {nick uhost hand chan text} {
     set_channel_setting $target_chan $option $value
     putserv "NOTICE $nick :Set $option to $value for $target_chan"
     putlog "PROTECTION: $nick set $option to $value for $target_chan"
+    
+    switch -glob $option {
+        "msgflood" {
+            putserv "NOTICE $nick :Tip: maxmsg (default:5) msgtime (default:5s) msgflood_punishment (kick/ban/none) msgflood_bantime (mins)"
+        }
+        "repeatflood" {
+            putserv "NOTICE $nick :Tip: maxrepeat (default:3) repeattime (default:30s) repeatflood_punishment (kick/ban/none) repeatflood_bantime (mins)"
+        }
+        "badwords" {
+            putserv "NOTICE $nick :Tip: badwords_punishment (kick/ban/none) badwords_bantime (mins) | Add words: badwords add <word>"
+        }
+        "badpart" {
+            putserv "NOTICE $nick :Tip: badpart_punishment (kick/ban/none) badpart_bantime (mins) | Uses badwords list"
+        }
+        "badchan" {
+            putserv "NOTICE $nick :Tip: badchan_punishment (kick/ban/none) badchan_bantime (mins) | Add channels: badchans add <#chan>"
+        }
+        "caps" {
+            putserv "NOTICE $nick :Tip: caps_percent (default:90) caps_minlen (default:15) caps_punishment (kick/ban/none) caps_bantime (mins)"
+        }
+        "spam" {
+            putserv "NOTICE $nick :Tip: spam_time (default:30s) spam_punishment (kick/ban/none) spam_bantime (mins) | Add words: spamwords add <word>"
+        }
+        "dnsbl" {
+            putserv "NOTICE $nick :Tip: dnsbl_zones <zone1 zone2...> dnsbl_require_all (0/1) dnsbl_punishment (kick/ban/none) dnsbl_bantime (mins)"
+        }
+    }
 }
 
 proc pub_protectionall {nick uhost hand chan text} {
