@@ -1495,8 +1495,7 @@ proc pub_unban {nick uhost hand chan text} {
 # ========================================================================
 
 proc pub_findhost {nick uhost hand chan text} {
-    if {$chan == ""} { set chan [lindex [channels] 0] }
-    if {![is_admin $nick $chan]} {
+    if {![matchattr $hand n] && ![matchattr $hand m]} {
         putserv "NOTICE $nick :Access denied."
         return
     }
