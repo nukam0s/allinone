@@ -20,7 +20,7 @@ namespace eval ::customscript {
 # Configuration
 set customscript(cmdchars) "!@.-"
 set customscript(datadir) "scripts/allinone"
-set customscript(update_url) "http://raw.githubusercontent.com/nukam0s/allinone/main/allinone.tcl"
+set customscript(update_url) "https://raw.githubusercontent.com/nukam0s/allinone/main/allinone.tcl"
 
 
 # Channel-specific word lists (replaces global lists)
