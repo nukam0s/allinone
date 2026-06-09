@@ -973,7 +973,7 @@ proc check_dnsbl_async {nick uhost hand chan} {
         start_dnsbl_checks $final_ip [list $nick $uhost $chan $zones $require_all]
         
     } err]} {
-        putlog "ERROR in check_dnsbl_async: $err | $::errorInfo"
+        putlog "ERROR in check_dnsbl_async: $err"
     }
 }
 
@@ -1495,6 +1495,7 @@ proc pub_unban {nick uhost hand chan text} {
 # ========================================================================
 
 proc pub_findhost {nick uhost hand chan text} {
+    if {$chan == ""} { set chan [lindex [channels] 0] }
     if {![is_admin $nick $chan]} {
         putserv "NOTICE $nick :Access denied."
         return
@@ -1507,7 +1508,7 @@ proc pub_findhost {nick uhost hand chan text} {
     set mask $text
     set found {}
     
-    foreach handle [userlist] {
+    foreach handle [userlist *] {
         set hosts [getuser $handle HOSTS]
         foreach h $hosts {
             if {[string match -nocase $mask $h] || [string match -nocase $h $mask]} {
@@ -1519,9 +1520,14 @@ proc pub_findhost {nick uhost hand chan text} {
     if {[llength $found] == 0} {
         putserv "NOTICE $nick :No users found matching: $mask"
     } else {
-        putserv "NOTICE $nick :Found [llength $found] match(es) for '$mask':"
-        foreach f $found {
+        set total [llength $found]
+        set shown [lrange $found 0 4]
+        putserv "NOTICE $nick :Found $total match(es) for '$mask' (showing [llength $shown]):"
+        foreach f $shown {
             putserv "NOTICE $nick :  $f"
+        }
+        if {$total > 5} {
+            putserv "NOTICE $nick :  ... and [expr {$total - 5}] more. Refine your search."
         }
     }
 }
