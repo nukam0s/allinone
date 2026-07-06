@@ -778,15 +778,10 @@ proc check_badwords {nick uhost hand chan text} {
                 return
             }
         } else {
-            # Se for uma palavra normal, procura-a isolada ou rodeada de pontuação
-            # Esta verificação é mais inteligente para não apanhar "computador" se a badword for "puta"
-            if {[string match "* $word_lower *" " $normalized_text "] || \
-                [string match "*$word_lower*" $normalized_text]} {
-                
-                # Se quiseres ser restrito (apanhar 'computador'), mantém o match simples.
-                # Se quiseres ser exato, usa word boundary (\y em regexp, mas complexo em glob).
-                # A versão atual do teu script apanha tudo (*palavra*). Vamos manter, mas limpar o código:
-                
+            # Se for uma palavra normal, apanha-a em qualquer parte do texto.
+            # A condição anterior com word-boundary por glob era redundante: '*palavra*'
+            # já apanha tudo o que '* palavra *' apanharia.
+            if {[string match "*$word_lower*" $normalized_text]} {
                 apply_punishment $nick $uhost $chan "badwords" "Bad word detected: $word"
                 return
             }
@@ -1041,13 +1036,13 @@ proc finalize_dnsbl_check {check_id} {
     set nick [lindex $context 0]
     set uhost [lindex $context 1]
     set chan [lindex $context 2]
-    set total_zones [lindex $context 3]
+    set zones_list [lindex $context 3]
     
     set listed_count [llength $listed_zones]
     set should_punish 0
     
     if {$require_all} {
-        if {$listed_count == [llength $total_zones] && $listed_count > 0} {
+        if {$listed_count == [llength $zones_list] && $listed_count > 0} {
             set should_punish 1
         }
     } else {
@@ -1401,6 +1396,9 @@ proc pub_ban {nick uhost hand chan text} {
         putserv "NOTICE $nick :Syntax: ban <nick/mask> [minutes] [reason] (0 for permanent)"
         return
     }
+    set args [split $text]
+    set target [lindex $args 0]
+    set possible_time [lindex $args 1]
     if {[isbotnick $target]} {
         putserv "NOTICE $nick :Eu não me posso banir a mim mesmo!"
         return
@@ -1409,9 +1407,6 @@ proc pub_ban {nick uhost hand chan text} {
         putserv "NOTICE $nick :Não sejas masoquista. Não te vou banir."
         return
     }
-    set args [split $text]
-    set target [lindex $args 0]
-    set possible_time [lindex $args 1]
 
     if {[string is integer -strict $possible_time]} {
         set minutes $possible_time
@@ -2763,8 +2758,8 @@ proc pub_update {nick uhost hand chan text} {
     putserv "NOTICE $nick :Update applied. Reloading..."
     putlog "UPDATE: Script updated from $url"
     source $scriptPath
-    putserv "REHASH"
     putserv "NOTICE $nick :Reload complete."
+    putserv "REHASH"
     putlog "UPDATE: Reload complete after update"
 }
 
@@ -2786,8 +2781,8 @@ proc pub_reload {nick uhost hand chan text} {
     putserv "NOTICE $nick :Reloaded configuration for $loaded_channels channels"
     putlog "RELOAD: $nick reloaded all configurations"
 
-    putserv "REHASH"
     putserv "NOTICE $nick :Eggdrop rehashed"
+    putserv "REHASH"
 }
 
 
@@ -2980,13 +2975,18 @@ proc msg_pub_ban {nick uhost hand text} {
     set target [lindex $args 0]
     set chan [lindex $args 1]
     set minutes [lindex $args 2]
+    set reason [join [lrange $args 3 end] " "]
     
     if {![validchan $chan]} {
         putserv "NOTICE $nick :Invalid channel: $chan"
         return
     }
     
-    pub_ban $nick $uhost $hand $chan "$target $minutes"
+    if {$minutes eq ""} {
+        pub_ban $nick $uhost $hand $chan "$target"
+    } else {
+        pub_ban $nick $uhost $hand $chan "$target $minutes $reason"
+    }
 }
 
 proc msg_pub_unban {nick uhost hand text} { 
@@ -3033,7 +3033,6 @@ proc msg_pub_alias {nick uhost hand text} { pub_alias $nick $uhost $hand "" $tex
 proc msg_pub_update {nick uhost hand text} { pub_update $nick $uhost $hand "" $text }
 proc msg_pub_addchan {nick uhost hand text} { pub_addchan $nick $uhost $hand "" $text }
 proc msg_pub_delchan {nick uhost hand text} { pub_delchan $nick $uhost $hand "" $text }
-proc msg_pub_dnsbl {nick uhost hand text} { pub_dnsbl $nick $uhost $hand "" $text }
 proc msg_pub_findhost {nick uhost hand text} { pub_findhost $nick $uhost $hand "" $text }
 
 
@@ -3081,7 +3080,6 @@ proc rebind_all_commands {} {
 		delchan pub_delchan
 		dnsbl pub_dnsbl
 		pubcmds pub_pubcmds
-		dnsbl pub_dnsbl
 		findhost pub_findhost
     }
     
