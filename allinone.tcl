@@ -257,7 +257,6 @@ proc del_channel_spamword {chan word} {
 proc fetch_and_write {url filePath} {
     set tmpfile "${filePath}.new"
     
-    # Faz o download usando Tcl nativo (suporta HTTPS se tiveres o pacote TLS)
     if {[catch {
         set token [::http::geturl $url -timeout 10000]
         set status [::http::status $token]
@@ -764,23 +763,18 @@ proc check_badwords {nick uhost hand chan text} {
     set badwords [get_channel_badwords $chan]
     if {[llength $badwords] == 0} return
     
-    # Remove formatação (cores/bold) para evitar bypass (ex: b.o.l.d)
     set clean_text [stripcodes bcru $text]
     set normalized_text [string tolower $clean_text]
     
     foreach word $badwords {
         set word_lower [string tolower $word]
         
-        # Se a palavra na lista já tiver "*", usa como está
         if {[string match "*\**" $word_lower]} {
             if {[string match $word_lower $normalized_text]} {
                 apply_punishment $nick $uhost $chan "badwords" "Bad word pattern: $word"
                 return
             }
         } else {
-            # Se for uma palavra normal, apanha-a em qualquer parte do texto.
-            # A condição anterior com word-boundary por glob era redundante: '*palavra*'
-            # já apanha tudo o que '* palavra *' apanharia.
             if {[string match "*$word_lower*" $normalized_text]} {
                 apply_punishment $nick $uhost $chan "badwords" "Bad word detected: $word"
                 return
@@ -1769,11 +1763,9 @@ proc pub_delhost {nick uhost hand chan text} {
 }
 
 proc pub_whois {nick uhost hand chan text} {
-    # Se chamado com chan vazio, escolhe um canal onde o bot esteja
     if {$chan == ""} {
         set chan [lindex [channels] 0]
     }
-    # Verificação de permissões: voice ou global admin
     if {![is_voice_level $nick $chan] && ![is_global_admin $nick]} {
         putserv "NOTICE $nick :Access denied."
         return
@@ -1789,22 +1781,18 @@ proc pub_whois {nick uhost hand chan text} {
     }
 
     putserv "NOTICE $nick := Info for $target ="
-    # Global flags
     set gflags [chattr $target]
     putserv "NOTICE $nick :Global flags: $gflags"
-    # Flags por canal
     foreach c [channels] {
         set cflags [chattr $target $c]
         if {$cflags ne ""} {
             putserv "NOTICE $nick :$c: $cflags"
         }
     }
-    # Hostmasks
     set hosts [getuser $target HOSTS]
     if {[llength $hosts] > 0} {
         putserv "NOTICE $nick :Hostmasks: [join $hosts {, }]"
     }
-    # Last seen com catch
     set last ""
     if {[catch {set last [getuser $target LASTSEEN]} err1]} {
         catch {set last [getuser $target lastseen]}
