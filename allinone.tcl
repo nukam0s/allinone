@@ -88,8 +88,18 @@ array set channel_public_disabled {}
 # PERMISSION FUNCTIONS
 # ========================================================================
 
+proc resolve_hand {nick {chan ""}} {
+    # nick2hand errors with "invalid channel:" when given an empty channel
+    # (e.g. via msg, where chan is ""). Fall back to a channel-less lookup
+    # which searches all channels the bot is on.
+    if {$chan ne ""} {
+        return [nick2hand $nick $chan]
+    }
+    return [nick2hand $nick]
+}
+
 proc is_admin {nick chan} {
-    set hand [nick2hand $nick $chan]
+    set hand [resolve_hand $nick $chan]
     if {[matchattr $hand n] || [matchattr $hand m] ||
         [matchattr $hand n $chan] || [matchattr $hand m $chan]} {
         return 1
@@ -98,7 +108,7 @@ proc is_admin {nick chan} {
 }
 
 proc is_op_level {nick chan} {
-    set hand [nick2hand $nick $chan]
+    set hand [resolve_hand $nick $chan]
     if {[matchattr $hand n] || [matchattr $hand m] || [matchattr $hand o] ||
         [matchattr $hand n $chan] || [matchattr $hand m $chan] || [matchattr $hand o $chan]} {
         return 1
@@ -107,7 +117,7 @@ proc is_op_level {nick chan} {
 }
 
 proc is_voice_level {nick chan} {
-    set hand [nick2hand $nick $chan]
+    set hand [resolve_hand $nick $chan]
     if {[matchattr $hand n] || [matchattr $hand m] || [matchattr $hand o] || [matchattr $hand v] ||
         [matchattr $hand n $chan] || [matchattr $hand m $chan] || [matchattr $hand o $chan] || [matchattr $hand v $chan]} {
         return 1
@@ -125,7 +135,7 @@ proc is_global_admin {nick} {
 }
 
 proc is_admin_on_channel {nick target_chan} {
-    set hand [nick2hand $nick $target_chan]
+    set hand [resolve_hand $nick $target_chan]
     if {[matchattr $hand n] || [matchattr $hand m] ||
         [matchattr $hand n $target_chan] || [matchattr $hand m $target_chan]} {
         return 1
@@ -134,7 +144,7 @@ proc is_admin_on_channel {nick target_chan} {
 }
 
 proc is_op_on_channel {nick target_chan} {
-    set hand [nick2hand $nick $target_chan]
+    set hand [resolve_hand $nick $target_chan]
     if {[matchattr $hand n] || [matchattr $hand m] || [matchattr $hand o] ||
         [matchattr $hand n $target_chan] || [matchattr $hand m $target_chan] || [matchattr $hand o $target_chan]} {
         return 1
