@@ -1533,6 +1533,10 @@ proc pub_chattr {nick uhost hand chan text} {
         putserv "NOTICE $nick :Syntax: chattr <handle> <flags> [#channel|global]"
         return
     }
+    if {$new_flags == ""} {
+        putserv "NOTICE $nick :Syntax: chattr <handle> <flags> [#channel|global]"
+        return
+    }
     if {![validuser $target_handle]} {
         putserv "NOTICE $nick :User $target_handle not found."
         return
@@ -1549,7 +1553,10 @@ proc pub_chattr {nick uhost hand chan text} {
         set apply_chan $chan
     }
 
-    putlog "DEBUG CHATTR: target_spec='$target_spec', apply_global=$apply_global, apply_chan='$apply_chan'"
+    if {!$apply_global && $apply_chan == ""} {
+        putserv "NOTICE $nick :Syntax: chattr <handle> <flags> [#channel|global]"
+        return
+    }
 
     set operations {}; set cur_op ""; set i 0
     while {$i < [string length $new_flags]} {
@@ -1563,7 +1570,11 @@ proc pub_chattr {nick uhost hand chan text} {
         incr i
     }
     set my_global  [chattr $hand]
-    set my_chan    [chattr $hand $chan]
+    if {$apply_chan ne ""} {
+        set my_chan [chattr $hand $apply_chan]
+    } else {
+        set my_chan $my_global
+    }
     foreach op $operations {
         set flag [string index $op 1]
         set ok 0
@@ -1593,12 +1604,12 @@ proc pub_chattr {nick uhost hand chan text} {
             return
         }
         if {[string match "-*" $op] && $target_handle eq $hand && [lsearch -exact {n m o} $flag] != -1} {
-            putserv "NOTICE $nick :Cannot remove your on flag '$flag'."
+            putserv "NOTICE $nick :Cannot remove your own flag '$flag'."
             return
         }
     }
     if {$apply_global} {
-        if {[catch {chattr $target_handle |$new_flags} err]} {
+        if {[catch {chattr $target_handle $new_flags} err]} {
             putserv "NOTICE $nick :Error: $err"
             return
         }
