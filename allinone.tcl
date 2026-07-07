@@ -89,10 +89,11 @@ array set channel_public_disabled {}
 # ========================================================================
 
 proc resolve_hand {nick {chan ""}} {
-    # nick2hand errors with "invalid channel:" when given an empty channel
-    # (e.g. via msg, where chan is ""). Fall back to a channel-less lookup
+    # nick2hand errors with "invalid channel:" when given an empty or
+    # unknown channel (e.g. via msg, where chan is "", or a user-supplied
+    # #channel that the bot isn't on). Fall back to a channel-less lookup
     # which searches all channels the bot is on.
-    if {$chan ne ""} {
+    if {$chan ne "" && [validchan $chan]} {
         return [nick2hand $nick $chan]
     }
     return [nick2hand $nick]
@@ -1182,6 +1183,11 @@ proc pub_pubcmds {nick uhost hand chan text} {
         set target_chan [lindex $args 1]
     }
 
+    if {$target_chan eq "" || ![validchan $target_chan]} {
+        putserv "NOTICE $nick :Invalid channel: $target_chan"
+        return
+    }
+
     if {![is_admin_on_channel $nick $target_chan]} {
         putserv "NOTICE $nick :Access denied on $target_chan."
         return
@@ -1568,6 +1574,11 @@ proc pub_chattr {nick uhost hand chan text} {
         return
     }
 
+    if {!$apply_global && ![validchan $apply_chan]} {
+        putserv "NOTICE $nick :Invalid channel: $apply_chan"
+        return
+    }
+
     set operations {}; set cur_op ""; set i 0
     while {$i < [string length $new_flags]} {
         set ch [string index $new_flags $i]
@@ -1834,13 +1845,19 @@ proc msg_pub_whois {nick uhost hand text} {
 # ========================================================================
 
 proc pub_chaninfo {nick uhost hand chan text} {
-    if {![is_voice_level $nick $chan]} {
-        putserv "NOTICE $nick :Access denied."
-        return
-    }
     set target_chan $chan
     if {$text ne ""} {
         set target_chan $text
+    }
+
+    if {$target_chan eq "" || ![validchan $target_chan]} {
+        putserv "NOTICE $nick :Invalid channel: $target_chan"
+        return
+    }
+
+    if {![is_voice_level $nick $target_chan]} {
+        putserv "NOTICE $nick :Access denied."
+        return
     }
 
     set vars {
@@ -1947,6 +1964,11 @@ proc pub_chanset {nick uhost hand chan text} {
         set value [lindex $args 1]
     }
     
+    if {$target_chan eq "" || ![validchan $target_chan]} {
+        putserv "NOTICE $nick :Invalid channel: $target_chan"
+        return
+    }
+
     if {![is_admin_on_channel $nick $target_chan]} {
         putserv "NOTICE $nick :Access denied on $target_chan."
         return
@@ -2027,6 +2049,11 @@ proc pub_protection {nick uhost hand chan text} {
 		}
 	}
     
+    if {$target_chan == "" || ![validchan $target_chan]} {
+        putserv "NOTICE $nick :Invalid channel: $target_chan"
+        return
+    }
+
     if {![is_admin_on_channel $nick $target_chan]} {
         putserv "NOTICE $nick :Access denied on $target_chan."
         return
@@ -2225,6 +2252,11 @@ proc pub_resetchan {nick uhost hand chan text} {
     set target_chan $chan
     if {$text != ""} { set target_chan $text }
     
+    if {$target_chan eq "" || ![validchan $target_chan]} {
+        putserv "NOTICE $nick :Invalid channel: $target_chan"
+        return
+    }
+
     if {![is_admin_on_channel $nick $target_chan]} {
         putserv "NOTICE $nick :Access denied on $target_chan."
         return
@@ -2303,7 +2335,7 @@ proc pub_badwords {nick uhost hand chan text} {
 
 	set target_chan [string trim $target_chan]
 	set target_chan [string map {\r "" \n "" \t ""} $target_chan]
-	if {$target_chan eq "" || [string index $target_chan 0] ne "#"} {
+	if {$target_chan eq "" || ![validchan $target_chan]} {
 		putserv "NOTICE $nick :Invalid channel: $target_chan"
 		return
 	}
@@ -2456,7 +2488,7 @@ proc pub_badchans {nick uhost hand chan text} {
     set badchan [string map {\r "" \n "" \t ""} [string trim $badchan]]
     set target_chan [string map {\r "" \n "" \t ""} [string trim $target_chan]]
 
-    if {$target_chan eq "" || [string index $target_chan 0] ne "#"} {
+    if {$target_chan eq "" || ![validchan $target_chan]} {
         putserv "NOTICE $nick :Invalid or missing target channel: $target_chan"
         return
     }
@@ -2551,7 +2583,7 @@ proc pub_spamwords {nick uhost hand chan text} {
     set word [string map {\r "" \n "" \t ""} [string trim $word]]
     set target_chan [string map {\r "" \n "" \t ""} [string trim $target_chan]]
 
-    if {$target_chan eq "" || [string index $target_chan 0] ne "#"} {
+    if {$target_chan eq "" || ![validchan $target_chan]} {
         putserv "NOTICE $nick :Invalid channel: $target_chan"
         return
     }
@@ -2619,6 +2651,11 @@ proc pub_dnsbl {nick uhost hand chan text} {
         set target_chan [lindex [split $text] 0]
     }
     
+    if {$target_chan eq "" || ![validchan $target_chan]} {
+        putserv "NOTICE $nick :Invalid channel: $target_chan"
+        return
+    }
+
     if {![is_admin_on_channel $nick $target_chan]} {
         putserv "NOTICE $nick :Access denied on $target_chan."
         return
