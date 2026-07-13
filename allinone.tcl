@@ -871,7 +871,7 @@ proc check_badpart {nick uhost hand chan reason} {
         if {[string match "*$word*" $normalized_reason]} {
             set mask "*!*@[lindex [split $uhost "@"] 1]"
             set bantime [get_channel_setting $chan badpart_bantime]
-            newchanban $chan $mask "BadPart" "BadPart: $word" [expr {$bantime * 60}]
+            newchanban $chan $mask "BadPart" "BadPart: $word" $bantime
             putlog "BADPART: Banned $nick ($mask) from $chan for part message: $word"
             return
         }
@@ -921,7 +921,7 @@ proc apply_punishment {nick uhost chan type reason} {
         }
         "ban" {
             set mask "*!*@[lindex [split $uhost "@"] 1]"
-            newchanban $chan $mask "Protection" $reason [expr {$bantime * 60}]
+            newchanban $chan $mask "Protection" $reason $bantime
             putkick $chan $nick $reason
             putlog "PROTECTION: Banned $nick from $chan for ${bantime}min ($type): $reason"
         }
@@ -1430,15 +1430,15 @@ proc pub_ban {nick uhost hand chan text} {
     set ban_type "TEMPORARY"
     
     if {$minutes eq "0"} {
-        set duration_seconds 0
+        set duration_minutes 0
         set ban_type "PERMANENT"
         set duration_str "PERMANENTLY"
     } elseif {$minutes eq ""} {
         set default_minutes [channel get $chan ban-time]
-        set duration_seconds [expr {$default_minutes * 60}]
+        set duration_minutes $default_minutes
         set duration_str "${default_minutes} minutes"
     } elseif {[string is integer $minutes] && $minutes > 0} {
-        set duration_seconds [expr {$minutes * 60}]
+        set duration_minutes $minutes
         set duration_str "${minutes} minutes"
     } else {
         putserv "NOTICE $nick :Invalid duration."
@@ -1458,7 +1458,7 @@ proc pub_ban {nick uhost hand chan text} {
         set newchanban_reason "Banned by $nick ($ban_type)"
     }
     
-    newchanban $chan $mask $nick $newchanban_reason $duration_seconds
+    newchanban $chan $mask $nick $newchanban_reason $duration_minutes
     
     if {[onchan $target $chan]} {
         if {$custom_reason ne ""} {
